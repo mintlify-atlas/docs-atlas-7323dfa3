@@ -1,0 +1,163 @@
+---
+title: "Ticket Categories API"
+description: "Manage ticket categories within your company. Categories group tickets by topic and can be toggled active or inactive."
+---
+
+All endpoints require a valid JWT in the `Authorization` header.
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+---
+
+## List categories
+
+
+
+**GET /api/tickets/categories**
+
+Return all ticket categories for a company.
+
+<Note>
+All authenticated users (USER, AGENT, COMPANY_ADMIN) can access this endpoint.
+</Note>
+
+### Query parameters
+
+<ParamField query="company_id" type="string" required>
+  UUID of the company whose categories you want to list.
+</ParamField>
+
+<ParamField query="is_active" type="boolean">
+  Filter by active status. Omit to return all categories regardless of status.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with an array of category objects, each including ticket counts.
+
+```bash Example request
+curl --request GET \
+  --url 'https://your-domain.com/api/tickets/categories?company_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890' \
+  --header 'Authorization: Bearer <jwt_token>'
+```
+
+---
+
+## Create category
+
+
+
+**POST /api/tickets/categories**
+
+Create a new ticket category.
+
+<Note>
+Restricted to COMPANY_ADMIN. The `company_id` is inferred automatically from the JWT — you do not need to include it in the request body. New categories are created with `is_active: true` by default.
+</Note>
+
+<Warning>
+Category names must be unique within your company. Submitting a duplicate name will return a `422` validation error.
+</Warning>
+
+### Body parameters
+
+<ParamField body="name" type="string" required>
+  Display name for the category. Must be unique within the company.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description of what this category covers.
+</ParamField>
+
+### Response
+
+Returns `201 Created` with the new category object.
+
+```bash Example request
+curl --request POST \
+  --url 'https://your-domain.com/api/tickets/categories' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Technical Support",
+    "description": "Technical issues with the system"
+  }'
+```
+
+---
+
+## Update category
+
+
+
+**PUT /api/tickets/categories/{id}**
+
+Update an existing category. All body fields are optional — only the fields you include will be changed.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  UUID of the category to update.
+</ParamField>
+
+### Body parameters
+
+<ParamField body="name" type="string">
+  New display name for the category.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Updated description.
+</ParamField>
+
+<ParamField body="is_active" type="boolean">
+  Set to `false` to deactivate the category so it no longer appears when creating new tickets.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated category object.
+
+```bash Example request
+curl --request PUT \
+  --url 'https://your-domain.com/api/tickets/categories/a1b2c3d4-e5f6-7890-abcd-ef1234567890' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Advanced Technical Support",
+    "description": "Complex technical issues requiring escalation",
+    "is_active": true
+  }'
+```
+
+---
+
+## Delete category
+
+
+
+**DELETE /api/tickets/categories/{id}**
+
+Permanently delete a category.
+
+<Warning>
+A category **cannot** be deleted if it has any tickets in `OPEN`, `PENDING`, or `RESOLVED` status. You must resolve or close all associated tickets before deleting the category. This is a hard delete — it cannot be undone.
+</Warning>
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  UUID of the category to delete.
+</ParamField>
+
+### Response
+
+Returns `200 OK` on success.
+
+```bash Example request
+curl --request DELETE \
+  --url 'https://your-domain.com/api/tickets/categories/a1b2c3d4-e5f6-7890-abcd-ef1234567890' \
+  --header 'Authorization: Bearer <jwt_token>'
+```

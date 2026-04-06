@@ -1,0 +1,476 @@
+---
+title: 'Register & Login'
+description: 'Create a new account, log in with email and password, authenticate via Google OAuth, and check your current authentication status.'
+---
+
+<Info>
+  All responses follow the standard envelope format: `{ success, data, message }`. Error
+  responses include an `errors` object with field-level validation messages.
+</Info>
+
+---
+
+## POST /api/auth/register
+
+Create a new user account. On success, the API issues a JWT access token and sets an
+HttpOnly `refresh_token` cookie. A verification email is dispatched automatically.
+
+**Authentication:** None required.
+
+### Request body
+
+<ParamField body="email" type="string" required>
+  User email address. Must be unique across the platform. Stored and compared
+  case-insensitively.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Account password. Minimum 8 characters and must contain at least one letter, one
+  number, and one symbol.
+</ParamField>
+
+<ParamField body="passwordConfirmation" type="string" required>
+  Must match the `password` field exactly.
+</ParamField>
+
+<ParamField body="firstName" type="string" required>
+  User's first name. Between 2 and 255 characters.
+</ParamField>
+
+<ParamField body="lastName" type="string" required>
+  User's last name. Between 2 and 255 characters.
+</ParamField>
+
+<ParamField body="acceptsTerms" type="boolean" required>
+  Must be `true`. The user explicitly accepts the terms of service.
+</ParamField>
+
+<ParamField body="acceptsPrivacyPolicy" type="boolean" required>
+  Must be `true`. The user explicitly accepts the privacy policy.
+</ParamField>
+
+### Response — 201 Created
+
+<ResponseField name="accessToken" type="string">
+  JWT access token. Include this as `Authorization: Bearer <token>` on subsequent
+  requests. Expires in 15 minutes.
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  Informational message. The actual refresh token is stored in the `refresh_token`
+  HttpOnly cookie automatically set by the server.
+</ResponseField>
+
+<ResponseField name="tokenType" type="string">
+  Always `"Bearer"`.
+</ResponseField>
+
+<ResponseField name="expiresIn" type="number">
+  Access token lifetime in seconds.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  UUID of the newly created session.
+</ResponseField>
+
+<ResponseField name="loginTimestamp" type="string">
+  ISO 8601 timestamp of the login event.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  <Expandable title="user properties">
+    <ResponseField name="id" type="string">
+      User UUID.
+    </ResponseField>
+    <ResponseField name="userCode" type="string">
+      Human-readable user code, e.g. `USR-20241101-001`.
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      User's email address.
+    </ResponseField>
+    <ResponseField name="emailVerified" type="boolean">
+      `false` immediately after registration. Becomes `true` once the verification
+      email link is clicked.
+    </ResponseField>
+    <ResponseField name="onboardingCompleted" type="boolean">
+      Whether the user has completed the onboarding flow.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      Account status. One of `ACTIVE`, `INACTIVE`, `SUSPENDED`.
+    </ResponseField>
+    <ResponseField name="displayName" type="string">
+      Full name, e.g. `"Juan Pérez"`.
+    </ResponseField>
+    <ResponseField name="avatarUrl" type="string | null">
+      URL to the user's avatar image, or `null` if not set.
+    </ResponseField>
+    <ResponseField name="theme" type="string">
+      UI theme preference. One of `"light"`, `"dark"`.
+    </ResponseField>
+    <ResponseField name="language" type="string">
+      Preferred language code, e.g. `"es"`.
+    </ResponseField>
+    <ResponseField name="roleContexts" type="object[]">
+      <Expandable title="roleContext properties">
+        <ResponseField name="roleCode" type="string">
+          One of `USER`, `AGENT`, `COMPANY_ADMIN`, `PLATFORM_ADMIN`.
+        </ResponseField>
+        <ResponseField name="roleName" type="string">
+          Localised role display name.
+        </ResponseField>
+        <ResponseField name="dashboardPath" type="string">
+          Default redirect path for this role.
+        </ResponseField>
+        <ResponseField name="company" type="object | null">
+          <Expandable title="company properties">
+            <ResponseField name="id" type="string">Company UUID.</ResponseField>
+            <ResponseField name="companyCode" type="string">Company code.</ResponseField>
+            <ResponseField name="name" type="string">Company display name.</ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error responses
+
+| Status | When |
+| ------ | ---- |
+| `422` | Validation failed — missing fields, weak password, passwords don't match, invalid email format |
+| `409` | Email address is already registered |
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url https://your-domain.com/api/auth/register \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "email": "jane@example.com",
+    "password": "SecurePass123!",
+    "passwordConfirmation": "SecurePass123!",
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "acceptsTerms": true,
+    "acceptsPrivacyPolicy": true
+  }'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="201 response example">
+    ```json
+    {
+      "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+      "refreshToken": "Refresh token set in httpOnly cookie",
+      "tokenType": "Bearer",
+      "expiresIn": 900,
+      "sessionId": "660e8400-e29b-41d4-a716-446655440011",
+      "loginTimestamp": "2024-11-01T10:30:00+00:00",
+      "user": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "userCode": "USR-20241101-001",
+        "email": "jane@example.com",
+        "emailVerified": false,
+        "onboardingCompleted": false,
+        "status": "ACTIVE",
+        "displayName": "Jane Doe",
+        "avatarUrl": null,
+        "theme": "light",
+        "language": "es",
+        "roleContexts": [
+          {
+            "roleCode": "USER",
+            "roleName": "Cliente",
+            "dashboardPath": "/tickets",
+            "company": null
+          }
+        ]
+      }
+    }
+    ```
+  </Accordion>
+  <Accordion title="422 validation error example">
+    ```json
+    {
+      "message": "The email field is required. (and 2 more errors)",
+      "errors": {
+        "email": ["El email es requerido."],
+        "password": ["La contraseña debe tener al menos 8 caracteres."],
+        "acceptsTerms": ["Debes aceptar los términos de servicio."]
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## POST /api/auth/login
+
+Authenticate an existing user with email and password. Returns a JWT access token and
+sets the `refresh_token` HttpOnly cookie.
+
+**Authentication:** None required.
+
+### Request body
+
+<ParamField body="email" type="string" required>
+  Registered email address. Compared case-insensitively.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Account password.
+</ParamField>
+
+<ParamField body="deviceName" type="string">
+  Optional custom label for this session (e.g. `"My iPhone"`). Auto-detected from
+  User-Agent if not provided.
+</ParamField>
+
+<ParamField body="rememberMe" type="boolean">
+  Reserved for future use. Currently has no effect on token lifetime.
+</ParamField>
+
+### Response — 200 OK
+
+Same shape as the [register response](#post-apiauth-register) above.
+
+<Warning>
+  The `refreshToken` field in the JSON body is an informational string, not the actual
+  token. The real refresh token is in the `Set-Cookie: refresh_token` response header.
+  Browsers handle this automatically; non-browser clients should capture and store the
+  cookie value.
+</Warning>
+
+### Error responses
+
+| Status | When |
+| ------ | ---- |
+| `422` | Validation failed — missing or malformed fields |
+| `401` | Wrong credentials, or the account is suspended or inactive |
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url https://your-domain.com/api/auth/login \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "email": "jane@example.com",
+    "password": "SecurePass123!"
+  }'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="200 response example">
+    ```json
+    {
+      "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+      "refreshToken": "Refresh token set in httpOnly cookie",
+      "tokenType": "Bearer",
+      "expiresIn": 900,
+      "sessionId": "660e8400-e29b-41d4-a716-446655440011",
+      "loginTimestamp": "2024-11-01T10:30:00+00:00",
+      "user": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "userCode": "USR-20241101-001",
+        "email": "jane@example.com",
+        "emailVerified": true,
+        "onboardingCompleted": true,
+        "status": "ACTIVE",
+        "displayName": "Jane Doe",
+        "avatarUrl": "https://your-domain.com/avatars/jane.jpg",
+        "theme": "light",
+        "language": "es",
+        "roleContexts": [
+          {
+            "roleCode": "COMPANY_ADMIN",
+            "roleName": "Administrador de Empresa",
+            "dashboardPath": "/empresa/dashboard",
+            "company": {
+              "id": "770e8400-e29b-41d4-a716-446655440088",
+              "companyCode": "CMP-20241101-001",
+              "name": "Acme Corp"
+            }
+          }
+        ]
+      }
+    }
+    ```
+  </Accordion>
+  <Accordion title="401 invalid credentials example">
+    ```json
+    {
+      "message": "Invalid credentials",
+      "error": "INVALID_CREDENTIALS"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## POST /api/auth/login/google
+
+<Warning>
+  This endpoint is **not yet implemented**. Sending a request returns HTTP `501 Not
+  Implemented`. It is planned for a future release.
+</Warning>
+
+Authenticate using a Google ID token obtained from the Google OAuth flow. If no account
+exists for the Google email, one is created automatically.
+
+**Authentication:** None required.
+
+### Request body
+
+<ParamField body="googleToken" type="string" required>
+  Google ID token from the client-side Google OAuth flow.
+</ParamField>
+
+### Response — 501 Not Implemented
+
+```json
+{
+  "success": false,
+  "message": "Google login not yet implemented"
+}
+```
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url https://your-domain.com/api/auth/login/google \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "googleToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+  }'
+```
+
+</CodeGroup>
+
+---
+
+## GET /api/auth/status
+
+Return the current authentication status, full user profile, active session details,
+and JWT token metadata. Use this endpoint to verify a token is still valid and to
+refresh the user object in your client.
+
+**Authentication:** Required — `Authorization: Bearer <accessToken>`
+
+### Response — 200 OK
+
+<ResponseField name="isAuthenticated" type="boolean">
+  Always `true` for a successful response.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Full user object. Same structure as the `user` field in the login response.
+</ResponseField>
+
+<ResponseField name="currentSession" type="object | null">
+  <Expandable title="currentSession properties">
+    <ResponseField name="sessionId" type="string">
+      UUID of the session associated with the current access token.
+    </ResponseField>
+    <ResponseField name="deviceName" type="string">
+      Device label, e.g. `"Chrome on Windows"`.
+    </ResponseField>
+    <ResponseField name="ipAddress" type="string">
+      IP address at the time of login.
+    </ResponseField>
+    <ResponseField name="userAgent" type="string">
+      Full User-Agent string.
+    </ResponseField>
+    <ResponseField name="lastUsedAt" type="string | null">
+      ISO 8601 timestamp of the last token refresh.
+    </ResponseField>
+    <ResponseField name="expiresAt" type="string | null">
+      ISO 8601 timestamp when the refresh token (and therefore the session) expires.
+    </ResponseField>
+    <ResponseField name="isCurrent" type="boolean">
+      Always `true` for this endpoint.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="tokenInfo" type="object">
+  <Expandable title="tokenInfo properties">
+    <ResponseField name="expiresIn" type="number">
+      Seconds remaining until the access token expires.
+    </ResponseField>
+    <ResponseField name="issuedAt" type="string">
+      ISO 8601 timestamp when the token was issued.
+    </ResponseField>
+    <ResponseField name="tokenType" type="string">
+      Always `"Bearer"`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error responses
+
+| Status | When |
+| ------ | ---- |
+| `401` | Missing, expired, or invalid access token |
+
+<CodeGroup>
+
+```bash cURL
+curl --request GET \
+  --url https://your-domain.com/api/auth/status \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="200 response example">
+    ```json
+    {
+      "isAuthenticated": true,
+      "user": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "userCode": "USR-20241101-001",
+        "email": "jane@example.com",
+        "emailVerified": true,
+        "onboardingCompleted": true,
+        "status": "ACTIVE",
+        "displayName": "Jane Doe",
+        "avatarUrl": null,
+        "theme": "light",
+        "language": "es",
+        "roleContexts": [
+          {
+            "roleCode": "USER",
+            "roleName": "Cliente",
+            "dashboardPath": "/tickets",
+            "company": null
+          }
+        ]
+      },
+      "currentSession": {
+        "sessionId": "660e8400-e29b-41d4-a716-446655440011",
+        "deviceName": "Chrome on Windows",
+        "ipAddress": "192.168.1.100",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+        "lastUsedAt": "2024-11-01T10:25:00+00:00",
+        "expiresAt": "2024-12-01T10:30:00+00:00",
+        "isCurrent": true
+      },
+      "tokenInfo": {
+        "expiresIn": 847,
+        "issuedAt": "2024-11-01T10:30:00+00:00",
+        "tokenType": "Bearer"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>

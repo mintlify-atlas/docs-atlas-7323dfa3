@@ -1,0 +1,1023 @@
+---
+title: "Companies"
+description: "Browse, follow, and manage companies. Includes public discovery endpoints, authenticated follow/unfollow actions, admin CRUD operations, and company request workflows."
+---
+
+Authenticated endpoints require a valid JWT access token:
+
+```bash
+Authorization: Bearer <your_access_token>
+```
+
+<Info>
+  **COMPANY_ADMIN scope** — A `COMPANY_ADMIN` can only see and manage their own company. Requests targeting other companies return `403 Forbidden`.
+</Info>
+
+---
+
+## Public endpoints
+
+The following endpoints do not require authentication.
+
+### List minimal companies
+
+Returns a lightweight list of active companies — useful for populating form selectors.
+
+```bash
+GET /api/companies/minimal
+```
+
+**Query parameters**
+
+<ParamField query="search" type="string">
+  Case-insensitive filter by company name.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="50">
+  Items per page.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url 'https://your-helpdesk.com/api/companies/minimal?search=acme&per_page=10'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "companyCode": "CMP-2025-00001",
+      "name": "Acme Corporation",
+      "logoUrl": "https://your-helpdesk.com/storage/logos/acme.png",
+      "industryName": "Technology"
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 50
+  },
+  "links": {
+    "first": "https://your-helpdesk.com/api/companies/minimal?page=1",
+    "last": "https://your-helpdesk.com/api/companies/minimal?page=1",
+    "prev": null,
+    "next": null
+  }
+}
+```
+
+---
+
+### List industries
+
+Returns all available industry categories. Use these IDs when creating companies or company requests.
+
+```bash
+GET /api/company-industries
+```
+
+**Query parameters**
+
+<ParamField query="with_counts" type="boolean" default="false">
+  When `true`, includes the number of active companies in each industry.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/company-industries
+```
+
+**Response `200`**
+
+```json
+{
+  "data": [
+    {
+      "id": "650e8400-e29b-41d4-a716-446655440001",
+      "code": "technology",
+      "name": "Technology",
+      "description": "Software, hardware, and IT services companies",
+      "createdAt": "2025-01-01T00:00:00Z",
+      "activeCompaniesCount": 45
+    }
+  ]
+}
+```
+
+<ResponseField name="data" type="array">
+  <Expandable title="industry object properties">
+    <ResponseField name="id" type="string">Industry UUID.</ResponseField>
+    <ResponseField name="code" type="string">Unique industry code (e.g. `technology`).</ResponseField>
+    <ResponseField name="name" type="string">Display name.</ResponseField>
+    <ResponseField name="description" type="string | null">Optional description.</ResponseField>
+    <ResponseField name="createdAt" type="string">ISO 8601 creation timestamp.</ResponseField>
+    <ResponseField name="activeCompaniesCount" type="integer">Only present when `with_counts=true`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### Submit a company request
+
+<Warning>
+  Throttled to **3 requests per hour** per IP address. Exceeding this returns `429 Too Many Requests`.
+</Warning>
+
+Submits a request for a new company to be created on the platform. The request enters a `PENDING` state and is reviewed by a `PLATFORM_ADMIN`. If approved, the company is automatically created and login credentials are emailed to `admin_email`.
+
+```bash
+POST /api/company-requests
+```
+
+**Request body**
+
+<ParamField body="company_name" type="string" required>
+  Company trade name. 2–200 characters.
+</ParamField>
+
+<ParamField body="admin_email" type="string" required>
+  Email address of the intended company administrator.
+</ParamField>
+
+<ParamField body="company_description" type="string" required>
+  Description of the company. 50–1000 characters.
+</ParamField>
+
+<ParamField body="industry_id" type="string" required>
+  UUID of the industry from `GET /api/company-industries`.
+</ParamField>
+
+<ParamField body="legal_name" type="string">
+  Legal registered name. 2–200 characters.
+</ParamField>
+
+<ParamField body="website" type="string">
+  Company website URL. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="request_message" type="string">
+  Message to the reviewers. 10–500 characters.
+</ParamField>
+
+<ParamField body="estimated_users" type="integer">
+  Estimated number of users. 1–10,000.
+</ParamField>
+
+<ParamField body="contact_address" type="string">
+  Street address. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="contact_city" type="string">
+  City. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="contact_country" type="string">
+  Country. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="contact_postal_code" type="string">
+  Postal/ZIP code. Maximum 20 characters.
+</ParamField>
+
+<ParamField body="tax_id" type="string">
+  Tax identifier (RUT, NIT, EIN, etc.). Maximum 50 characters.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/company-requests \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "company_name": "TechCorp Solutions",
+    "legal_name": "TechCorp Solutions S.A.",
+    "admin_email": "admin@techcorp.com",
+    "company_description": "We are a leading technology solutions company with over 10 years of experience providing enterprise software solutions.",
+    "industry_id": "650e8400-e29b-41d4-a716-446655440001",
+    "website": "https://techcorp.com",
+    "request_message": "We need a professional helpdesk system for our 50-agent support team.",
+    "estimated_users": 500,
+    "contact_city": "San Francisco",
+    "contact_country": "United States"
+  }'
+```
+
+**Response `201`**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "requestCode": "REQ-20251101-001",
+  "companyName": "TechCorp Solutions",
+  "adminEmail": "admin@techcorp.com",
+  "status": "PENDING",
+  "reviewedAt": null,
+  "rejectionReason": null,
+  "createdAt": "2025-11-01T12:00:00Z",
+  "updatedAt": "2025-11-01T12:00:00Z"
+}
+```
+
+---
+
+## Authenticated endpoints
+
+All endpoints in this section require a valid JWT token.
+
+### Explore companies
+
+Browse all active companies with follower counts and per-user follow status.
+
+```bash
+GET /api/companies/explore
+```
+
+**Query parameters**
+
+<ParamField query="search" type="string">
+  Filter companies by name.
+</ParamField>
+
+<ParamField query="industry_id" type="string">
+  Filter by industry UUID.
+</ParamField>
+
+<ParamField query="country" type="string">
+  Filter by country.
+</ParamField>
+
+<ParamField query="followed_by_me" type="boolean" default="false">
+  When `true`, returns only companies the authenticated user follows.
+</ParamField>
+
+<ParamField query="sort_by" type="string" default="name">
+  Field to sort by. Use `followers_count` to sort by popularity.
+</ParamField>
+
+<ParamField query="sort_direction" type="string" default="asc">
+  Sort direction: `asc` or `desc`.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="20">
+  Items per page.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url 'https://your-helpdesk.com/api/companies/explore?sort_by=followers_count&sort_direction=desc' \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "company_code": "CMP-2025-00001",
+      "name": "Acme Corporation",
+      "logo_url": "https://your-helpdesk.com/storage/logos/acme.png",
+      "website": "https://acme.com",
+      "contact_country": "United States",
+      "industry": {
+        "id": "650e8400-e29b-41d4-a716-446655440001",
+        "code": "technology",
+        "name": "Technology"
+      },
+      "followers_count": 128,
+      "is_followed_by_me": false
+    }
+  ],
+  "meta": { "total": 1, "current_page": 1, "last_page": 1, "per_page": 20 },
+  "links": { "first": "...", "last": "...", "prev": null, "next": null }
+}
+```
+
+---
+
+### Get followed companies
+
+Returns all companies the authenticated user is currently following, ordered by most recently followed first.
+
+```bash
+GET /api/companies/followed
+```
+
+**Query parameters**
+
+<ParamField query="page" type="integer">
+  Page number.
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Items per page. Maximum 100.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/companies/followed \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": [
+    {
+      "id": "follow-uuid-here",
+      "company": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "companyCode": "CMP-2025-00001",
+        "name": "Acme Corporation",
+        "logoUrl": "https://your-helpdesk.com/storage/logos/acme.png"
+      },
+      "followedAt": "2025-10-15T09:30:00Z",
+      "myTicketsCount": 3,
+      "lastTicketCreatedAt": "2025-10-20T11:00:00Z",
+      "hasUnreadAnnouncements": true
+    }
+  ]
+}
+```
+
+---
+
+### Check follow status
+
+Returns whether the authenticated user is following a specific company.
+
+```bash
+GET /api/companies/{company}/is-following
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000/is-following \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "isFollowing": true
+  }
+}
+```
+
+---
+
+### Follow a company
+
+<Warning>
+  Throttled to **20 requests per hour** per authenticated user.
+</Warning>
+
+Follows a company. Returns `201` on a new follow and `200` if already following.
+
+```bash
+POST /api/companies/{company}/follow
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000/follow \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `201`**
+
+```json
+{
+  "success": true,
+  "message": "You are now following Acme Corporation.",
+  "company": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "companyCode": "CMP-2025-00001",
+    "name": "Acme Corporation",
+    "logoUrl": "https://your-helpdesk.com/storage/logos/acme.png"
+  },
+  "followedAt": "2025-11-01T10:00:00Z"
+}
+```
+
+---
+
+### Unfollow a company
+
+Stops following a company. Returns `409 Conflict` if the user was not following the company.
+
+```bash
+DELETE /api/companies/{company}/unfollow
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request DELETE \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000/unfollow \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "message": "You have unfollowed Acme Corporation."
+}
+```
+
+---
+
+### Get company details
+
+Returns the full details for a single company including admin info, follower count, agent count, and user follow status.
+
+```bash
+GET /api/companies/{company}
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000 \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "company_code": "CMP-2025-00001",
+  "name": "Acme Corporation",
+  "legal_name": "Acme Corp S.A.",
+  "status": "active",
+  "support_email": "support@acme.com",
+  "phone": "+12125550100",
+  "website": "https://acme.com",
+  "logo_url": "https://your-helpdesk.com/storage/logos/acme.png",
+  "industry": {
+    "id": "650e8400-e29b-41d4-a716-446655440001",
+    "code": "technology",
+    "name": "Technology"
+  },
+  "admin": { "id": "...", "email": "admin@acme.com" },
+  "followers_count": 128,
+  "active_agents_count": 12,
+  "total_users_count": 305,
+  "is_followed_by_me": true,
+  "created_at": "2025-01-10T08:00:00Z",
+  "updated_at": "2025-11-01T12:00:00Z"
+}
+```
+
+<ResponseField name="followers_count" type="integer">Total number of users following this company.</ResponseField>
+<ResponseField name="active_agents_count" type="integer">Number of active agents assigned to this company.</ResponseField>
+<ResponseField name="total_users_count" type="integer">Total number of users with an active role in this company.</ResponseField>
+<ResponseField name="is_followed_by_me" type="boolean">Whether the authenticated user follows this company.</ResponseField>
+
+---
+
+## Admin endpoints
+
+<Note>
+  The endpoints below require `PLATFORM_ADMIN` or `COMPANY_ADMIN`. A `COMPANY_ADMIN` can only see and manage their own company.
+</Note>
+
+### List companies (admin)
+
+Returns a full paginated list of companies with administrative data including agent counts and follower counts.
+
+```bash
+GET /api/companies
+```
+
+**Query parameters**
+
+<ParamField query="search" type="string">
+  Filter by company name.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by status: `active`, `suspended`, or `inactive`.
+</ParamField>
+
+<ParamField query="industry_id" type="string">
+  Filter by industry UUID.
+</ParamField>
+
+<ParamField query="sort_by" type="string" default="created_at">
+  Field to sort by.
+</ParamField>
+
+<ParamField query="sort_direction" type="string" default="desc">
+  Sort direction: `asc` or `desc`.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="20">
+  Items per page.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url 'https://your-helpdesk.com/api/companies?status=active&sort_by=name&sort_direction=asc' \
+  --header 'Authorization: Bearer <token>'
+```
+
+---
+
+### Create company
+
+<Warning>
+  Requires `PLATFORM_ADMIN`. Throttled to **10 requests per hour**.
+</Warning>
+
+Creates a new company and automatically assigns the `COMPANY_ADMIN` role to the designated admin user. If the admin user does not exist, they will be created and sent login credentials by email.
+
+```bash
+POST /api/companies
+```
+
+**Request body**
+
+<ParamField body="name" type="string" required>
+  Company trade name. 2–255 characters.
+</ParamField>
+
+<ParamField body="legal_name" type="string" required>
+  Legal registered name. 2–255 characters.
+</ParamField>
+
+<ParamField body="support_email" type="string" required>
+  Support email address. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="admin_user_id" type="string" required>
+  UUID of the user to designate as company administrator. The `COMPANY_ADMIN` role will be assigned automatically.
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Contact phone number. Maximum 20 characters.
+</ParamField>
+
+<ParamField body="website" type="string">
+  Company website URL. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="industry_id" type="string">
+  Industry UUID from `GET /api/company-industries`.
+</ParamField>
+
+<ParamField body="contact_address" type="string">
+  Street address. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="contact_city" type="string">
+  City. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="contact_state" type="string">
+  State or region. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="contact_country" type="string">
+  Country. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="contact_postal_code" type="string">
+  Postal/ZIP code. Maximum 20 characters.
+</ParamField>
+
+<ParamField body="tax_id" type="string">
+  Tax identifier (RUT, NIT, EIN, etc.). Maximum 50 characters.
+</ParamField>
+
+<ParamField body="legal_representative" type="string">
+  Legal representative name. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="timezone" type="string">
+  IANA timezone identifier (e.g. `America/New_York`).
+</ParamField>
+
+<ParamField body="business_hours" type="object">
+  JSONB object defining business hours (e.g. `{ "monday": { "open": "09:00", "close": "18:00" } }`).
+</ParamField>
+
+<ParamField body="settings" type="object">
+  Additional settings as a JSONB object.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/companies \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Acme Corporation",
+    "legal_name": "Acme Corp S.A.",
+    "support_email": "support@acme.com",
+    "admin_user_id": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+    "phone": "+12125550100",
+    "website": "https://acme.com",
+    "industry_id": "650e8400-e29b-41d4-a716-446655440001",
+    "timezone": "America/New_York"
+  }'
+```
+
+**Response `201`**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "company_code": "CMP-2025-00001",
+  "name": "Acme Corporation",
+  "status": "active",
+  "admin": { "id": "9d4e8c91-...", "email": "admin@acme.com" },
+  "created_at": "2025-11-01T10:00:00Z"
+}
+```
+
+---
+
+### Update company
+
+Updates a company's details. Accepts both `PUT` and `PATCH`. All fields are optional — only the provided fields are updated.
+
+```bash
+PUT /api/companies/{company}
+PATCH /api/companies/{company}
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Authorization rules**
+
+| Role | Can update |
+|------|-----------|
+| `PLATFORM_ADMIN` | Any company |
+| `COMPANY_ADMIN` | Only their own company |
+
+**Request body**
+
+All fields are optional.
+
+<ParamField body="name" type="string">Trade name. 2–255 characters.</ParamField>
+<ParamField body="legal_name" type="string">Legal name. 2–255 characters.</ParamField>
+<ParamField body="support_email" type="string">Support email. Maximum 255 characters.</ParamField>
+<ParamField body="phone" type="string">Phone number. Maximum 20 characters.</ParamField>
+<ParamField body="website" type="string">Website URL. Maximum 255 characters.</ParamField>
+<ParamField body="industry_id" type="string">Industry UUID.</ParamField>
+<ParamField body="contact_address" type="string">Street address. Maximum 255 characters.</ParamField>
+<ParamField body="contact_city" type="string">City. Maximum 100 characters.</ParamField>
+<ParamField body="contact_state" type="string">State or region. Maximum 100 characters.</ParamField>
+<ParamField body="contact_country" type="string">Country. Maximum 100 characters.</ParamField>
+<ParamField body="contact_postal_code" type="string">Postal code. Maximum 20 characters.</ParamField>
+<ParamField body="tax_id" type="string">Tax identifier. Maximum 50 characters.</ParamField>
+<ParamField body="legal_representative" type="string">Legal representative. Maximum 255 characters.</ParamField>
+<ParamField body="timezone" type="string">IANA timezone identifier.</ParamField>
+<ParamField body="primary_color" type="string">Brand primary color in hex (e.g. `#FF5733`).</ParamField>
+<ParamField body="secondary_color" type="string">Brand secondary color in hex (e.g. `#33FF57`).</ParamField>
+<ParamField body="business_hours" type="object">Business hours JSONB object.</ParamField>
+<ParamField body="settings" type="object">Additional settings JSONB object.</ParamField>
+
+**Example**
+
+```bash
+curl --request PATCH \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000 \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Acme Corp",
+    "website": "https://acmecorp.com",
+    "primary_color": "#0066CC"
+  }'
+```
+
+**Response `200`** — Returns the full updated company resource.
+
+---
+
+### Upload logo
+
+<Warning>
+  Throttled to **3 requests per hour** per company.
+</Warning>
+
+Uploads a logo image for a company. Send as `multipart/form-data`. Supported formats: JPEG, PNG, GIF, WebP, SVG. Maximum file size: **5 MB**.
+
+```bash
+POST /api/companies/{company}/logo
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Request body (multipart/form-data)**
+
+<ParamField body="logo" type="file" required>
+  Logo image file. Max 5 MB.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000/logo \
+  --header 'Authorization: Bearer <token>' \
+  --form 'logo=@/path/to/logo.png'
+```
+
+---
+
+### Upload favicon
+
+<Warning>
+  Throttled to **3 requests per hour** per company.
+</Warning>
+
+Uploads a favicon for a company. Same constraints as logo upload.
+
+```bash
+POST /api/companies/{company}/favicon
+```
+
+**Path parameters**
+
+<ParamField path="company" type="string" required>
+  Company UUID.
+</ParamField>
+
+**Request body (multipart/form-data)**
+
+<ParamField body="favicon" type="file" required>
+  Favicon image file. Max 5 MB.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/companies/550e8400-e29b-41d4-a716-446655440000/favicon \
+  --header 'Authorization: Bearer <token>' \
+  --form 'favicon=@/path/to/favicon.ico'
+```
+
+---
+
+## Company request admin actions
+
+<Note>
+  The following endpoints require `PLATFORM_ADMIN`.
+</Note>
+
+### List company requests
+
+Returns a paginated list of all company requests.
+
+```bash
+GET /api/company-requests
+```
+
+**Query parameters**
+
+<ParamField query="status" type="string">
+  Filter by status: `PENDING`, `APPROVED`, or `REJECTED`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Filter by company name.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Field to sort by.
+</ParamField>
+
+<ParamField query="order" type="string">
+  Sort direction: `asc` or `desc`.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Items per page.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url 'https://your-helpdesk.com/api/company-requests?status=PENDING' \
+  --header 'Authorization: Bearer <token>'
+```
+
+---
+
+### Approve a company request
+
+Approves a `PENDING` company request. The platform automatically:
+
+1. Creates the company record.
+2. Creates the admin user if the `admin_email` does not already exist.
+3. Assigns the `COMPANY_ADMIN` role to the admin user.
+4. Sends a welcome email with login credentials (valid 7 days if the account was newly created).
+
+```bash
+POST /api/company-requests/{id}/approve
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  Company request UUID.
+</ParamField>
+
+**Request body**
+
+<ParamField body="notes" type="string">
+  Optional approval notes.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/company-requests/9d8e4f1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a/approve \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "notes": "Documentation verified, all requirements met."
+  }'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "success": true,
+    "message": "Request approved. Company 'TechCorp Solutions' has been created and credentials sent to admin@techcorp.com.",
+    "company": {
+      "id": "9d8e4f1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a",
+      "companyCode": "CMP-20250001",
+      "name": "TechCorp Solutions",
+      "legalName": "TechCorp Solutions S.A.",
+      "status": "ACTIVE",
+      "adminId": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "adminEmail": "admin@techcorp.com",
+      "adminName": "Admin User",
+      "createdAt": "2025-11-01T10:30:00Z"
+    },
+    "newUserCreated": true,
+    "notificationSentTo": "admin@techcorp.com"
+  }
+}
+```
+
+---
+
+### Reject a company request
+
+Rejects a `PENDING` company request and sends a rejection email to the applicant.
+
+```bash
+POST /api/company-requests/{id}/reject
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  Company request UUID.
+</ParamField>
+
+**Request body**
+
+<ParamField body="reason" type="string" required>
+  Rejection reason. Minimum 10 characters. Sent to the applicant via email.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Optional internal notes (not shared with the applicant).
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/company-requests/9d8e4f1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a/reject \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "reason": "The provided documentation does not meet minimum requirements. Please submit a valid tax certificate and updated business registration."
+  }'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "success": true,
+    "message": "The request for 'TechCorp Solutions' has been rejected. A notification has been sent to admin@techcorp.com.",
+    "reason": "The provided documentation does not meet minimum requirements.",
+    "notificationSentTo": "admin@techcorp.com",
+    "requestCode": "REQ-20251101-001"
+  }
+}
+```
+
+---
+
+## Error responses
+
+All endpoints return errors in a consistent format:
+
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "code": "ERROR_CODE"
+}
+```
+
+| HTTP status | When it occurs |
+|-------------|---------------|
+| `401` | Missing or invalid JWT token |
+| `403` | Authenticated but insufficient permissions |
+| `404` | Resource not found |
+| `409` | Conflict — e.g. request already processed, or user already following/not following |
+| `422` | Validation error — `errors` object contains field-level messages |
+| `429` | Rate limit exceeded |

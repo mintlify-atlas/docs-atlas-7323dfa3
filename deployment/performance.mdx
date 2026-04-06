@@ -1,0 +1,237 @@
+---
+title: "Performance & Optimization"
+description: "Caching strategies, OPcache configuration, and optimization commands for the Helpdesk platform. Covers Laravel caches, Redis, autoloader optimization, and expected performance targets."
+keywords: ["performance", "optimization", "opcache", "redis", "cache", "config cache", "route cache", "view cache", "n+1", "eager loading"]
+---
+
+The platform is built with several performance layers that work together. Understanding when and how to activate each layer helps you keep response times low in every environment.
+
+## Expected performance targets
+
+| Scenario           | Target          |
+| ------------------ | --------------- |
+| Cold start         | 200 – 500 ms    |
+| Warm requests      | < 165 ms        |
+| Cache hit rate     | > 95%           |
+
+A "cold start" means the first request after PHP-FPM starts, before OPcache has compiled the application files. Subsequent warm requests benefit from compiled bytecode in OPcache and pre-built caches in Redis.
+
+## Performance optimization script
+
+The fastest way to apply all optimizations at once:
+
+```bash
+./scripts/optimize-performance.sh
+```
+
+The script runs the following steps in sequence:
+
+1. Caches Laravel config, routes, and views
+2. Optimises the Composer autoloader
+3. Clears and resets OPcache
+4. Warms up the application with several HTTP requests
+
+Run this after every deployment or after making changes that require cache rebuilds.
+
+## OPcache
+
+OPcache compiles PHP source files to bytecode and stores them in shared memory, eliminating the need to parse and compile files on every request.
+
+The development Docker image ships with OPcache enabled and tuned via `docker/php/local.ini`. Key settings:
+
+| Setting                            | Purpose                                                         |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `opcache.enable=1`                 | Enable OPcache.                                                 |
+| `opcache.memory_consumption`       | Memory allocated for the bytecode cache.                        |
+| `opcache.interned_strings_buffer`  | Memory for interned strings (class names, function names, etc.). |
+| `opcache.max_accelerated_files`    | Maximum number of files that can be cached.                     |
+| `opcache.validate_timestamps=0`    | Disable file timestamp checks in production for maximum speed.  |
+| `opcache.save_comments=1`          | Required by Laravel for annotation/attribute reading.           |
+
+<Warning>
+  With `opcache.validate_timestamps=0`, PHP never checks whether a source file
+  has changed on disk. You must reset OPcache manually after deploying new code:
+
+  ```bash
+  docker compose exec app php -r "if(function_exists('opcache_reset')) opcache_reset();"
+  ```
+</Warning>
+
+## Laravel caches
+
+Laravel can pre-build three artefacts at deploy time, removing runtime overhead from every request.
+
+<CardGroup cols={3}>
+  <Card title="Config cache" icon="gear">
+    Merges all configuration files into a single compiled PHP file. Eliminates
+    filesystem reads and array merging on each request.
+  </Card>
+  <Card title="Route cache" icon="route">
+    Compiles the full route list into a serialised cache file. Speeds up route
+    matching, especially in large applications with many routes.
+  </Card>
+  <Card title="View cache" icon="eye">
+    Pre-compiles all Blade templates to PHP. Removes the Blade compilation step
+    from the first render of each view.
+  </Card>
+</CardGroup>
+
+### Building the caches
+
+```bash
+docker compose exec app php artisan config:cache
+docker compose exec app php artisan route:cache
+docker compose exec app php artisan view:cache
+```
+
+Or use the optimization script to run all three together:
+
+```bash
+./scripts/optimize-performance.sh
+```
+
+### When to rebuild caches
+
+| Event                                      | Action required                         |
+| ------------------------------------------ | --------------------------------------- |
+| Adding or modifying a route                | `php artisan route:cache`               |
+| Adding or modifying a Blade template       | `php artisan view:cache`                |
+| Changing any value in `config/`            | `php artisan config:cache`              |
+| Changing a `.env` value                    | `php artisan config:cache`              |
+| Deploying new code                         | Run `./scripts/optimize-performance.sh` |
+
+<Warning>
+  Do not use config cache during active development. When the config is cached,
+  changes to `.env` are **not** picked up until you re-run `config:cache` or
+  clear it. Clear first if you need live config changes:
+
+  ```bash
+  docker compose exec app php artisan config:clear
+  ```
+</Warning>
+
+## Clearing caches
+
+### Clear everything at once
+
+```bash
+docker compose exec app php artisan optimize:clear
+```
+
+This clears compiled views, the route cache, the config cache, the application cache, and bootstrapped files in one command.
+
+### Clear individual caches
+
+<CodeGroup>
+
+```bash Config cache
+docker compose exec app php artisan config:clear
+```
+
+```bash Route cache
+docker compose exec app php artisan route:clear
+```
+
+```bash View cache
+docker compose exec app php artisan view:clear
+```
+
+```bash Application cache (Redis)
+docker compose exec app php artisan cache:clear
+```
+
+</CodeGroup>
+
+<Tip>
+  If a route change is not taking effect, clearing the route cache is almost
+  always the fix:
+
+  ```bash
+  docker compose exec app php artisan route:clear
+  ```
+</Tip>
+
+## Redis caching
+
+Redis backs the cache, session, and queue layers. All three are configured by default:
+
+| Layer    | Driver  | Configuration variable |
+| -------- | ------- | ---------------------- |
+| Cache    | `redis` | `CACHE_STORE=redis`    |
+| Session  | `redis` | `SESSION_DRIVER=redis` |
+| Queue    | `redis` | `QUEUE_CONNECTION=redis` |
+
+Using Redis for sessions and cache is required in a multi-container setup — file-based drivers do not share state across the `app`, `queue`, and `scheduler` containers.
+
+The `helpdesk_cache` prefix (set via `CACHE_PREFIX`) namespaces all cache keys so they do not collide with other applications sharing the same Redis instance.
+
+## Stateless JWT authentication
+
+The API uses stateless JWT tokens. Because the token is self-contained and verified using a shared secret, authentication middleware does not need to query the database on every request. This eliminates one database round-trip per authenticated API call.
+
+- Access tokens expire after **15 minutes**.
+- Refresh tokens are valid for **7 days** (20,160 minutes).
+- Token verification uses HMAC-SHA256 against `JWT_SECRET` — no database lookup.
+
+## Eager loading (N+1 prevention)
+
+Eloquent queries use eager loading throughout the codebase to prevent N+1 query problems. When a controller returns a collection of models with relationships, those relationships are loaded in a fixed number of queries regardless of collection size.
+
+```php
+// Without eager loading: 1 query for users + N queries for profiles
+$users = User::all();
+
+// With eager loading: 2 queries total
+$users = User::with('profile')->get();
+```
+
+Models in this platform load their common relationships by default using `$with` on the model or explicit `with()` calls in service methods.
+
+## Autoloader optimization
+
+Composer's optimized autoloader generates a class map instead of performing filesystem lookups when resolving class names. This reduces the time PHP spends finding files for each class.
+
+```bash
+docker compose exec app composer dump-autoload -o
+```
+
+The `-o` flag generates the optimised classmap. This is included automatically in the optimization script and should be run as part of every production deployment.
+
+## Putting it all together
+
+For a production deployment, apply optimizations in this order:
+
+<Steps>
+  <Step title="Deploy new code">
+    Pull the latest code and rebuild Docker images if the Dockerfile changed:
+
+    ```bash
+    docker compose up -d --build
+    ```
+  </Step>
+
+  <Step title="Run database migrations">
+    ```bash
+    docker compose exec app php artisan migrate
+    ```
+  </Step>
+
+  <Step title="Run the optimization script">
+    ```bash
+    ./scripts/optimize-performance.sh
+    ```
+
+    This caches config, routes, and views; optimises the autoloader; and resets
+    OPcache.
+  </Step>
+
+  <Step title="Verify cache status">
+    Confirm all caches are active by checking the bootstrapped cache files:
+
+    ```bash
+    docker compose exec app php artisan about
+    ```
+
+    The output shows which caches are currently loaded.
+  </Step>
+</Steps>

@@ -1,0 +1,124 @@
+---
+title: 'Help Center Categories'
+description: 'Retrieve the four global help center categories used to organize articles across the platform.'
+---
+
+Help center categories are the four fixed, platform-wide groupings used to organize articles. They are not company-specific — every company shares the same set of categories.
+
+<Tip>
+  Use the `id` returned by this endpoint as the `category_id` when [creating](/api/help-center/articles#create-article) or [updating](/api/help-center/articles#update-article) an article.
+</Tip>
+
+---
+
+## List categories
+
+Returns all four global help center categories. This endpoint is **public** — no authentication is required.
+
+```bash
+GET /api/help-center/categories
+```
+
+### Categories
+
+| Code | Name |
+| --- | --- |
+| `ACCOUNT_PROFILE` | Account and profile management |
+| `SECURITY_PRIVACY` | Security settings and privacy controls |
+| `BILLING_PAYMENTS` | Billing, invoices, and payments |
+| `TECHNICAL_SUPPORT` | Technical issues and troubleshooting |
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  `true` on a successful response.
+</ResponseField>
+
+<ResponseField name="data" type="array" required>
+  Array of exactly 4 category objects.
+
+  <Expandable title="category properties">
+    <ResponseField name="id" type="string" required>
+      Category UUID. Use this as `category_id` when creating or updating articles.
+    </ResponseField>
+    <ResponseField name="code" type="string" required>
+      Unique category code used in the `category` filter on the articles endpoint.
+      One of: `ACCOUNT_PROFILE`, `SECURITY_PRIVACY`, `BILLING_PAYMENTS`, `TECHNICAL_SUPPORT`.
+    </ResponseField>
+    <ResponseField name="name" type="string" required>
+      Human-readable category name.
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Longer description of what articles belong to this category. May be `null`.
+    </ResponseField>
+    <ResponseField name="created_at" type="string" required>
+      ISO 8601 creation timestamp.
+    </ResponseField>
+    <ResponseField name="updated_at" type="string" required>
+      ISO 8601 last-updated timestamp.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+
+```bash Without authentication (public)
+curl --request GET \
+  --url 'https://your-domain.com/api/help-center/categories'
+```
+
+```bash With authentication
+curl --request GET \
+  --url 'https://your-domain.com/api/help-center/categories' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "data": [
+    {
+      "id": "01921b2c-aaaa-7f89-a012-000000000001",
+      "code": "ACCOUNT_PROFILE",
+      "name": "Account and profile management",
+      "description": "Articles covering account settings, profile updates, and personal preferences.",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "01921b2c-aaaa-7f89-a012-000000000002",
+      "code": "SECURITY_PRIVACY",
+      "name": "Security settings and privacy controls",
+      "description": "Articles about two-factor authentication, password management, and privacy settings.",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "01921b2c-aaaa-7f89-a012-000000000003",
+      "code": "BILLING_PAYMENTS",
+      "name": "Billing, invoices, and payments",
+      "description": "Articles about subscription plans, invoices, payment methods, and billing inquiries.",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "01921b2c-aaaa-7f89-a012-000000000004",
+      "code": "TECHNICAL_SUPPORT",
+      "name": "Technical issues and troubleshooting",
+      "description": "Articles covering common technical problems, error messages, and step-by-step troubleshooting guides.",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Error responses
+
+| Status | Meaning |
+| --- | --- |
+| `500` | Unexpected server error. |

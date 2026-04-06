@@ -1,0 +1,220 @@
+---
+title: 'Announcements API'
+description: 'Manage company announcements including alerts, news, incidents, and maintenance notices. Supports drafting, scheduling, publishing, archiving, and restoring announcements.'
+---
+
+All endpoints require a JWT Bearer token:
+
+```
+Authorization: Bearer <jwt_token>
+```
+
+## List announcements
+
+
+
+```
+GET /api/announcements
+```
+
+Returns a paginated list of announcements. `COMPANY_ADMIN` sees all statuses from their company. All other authenticated users see only `PUBLISHED` announcements.
+
+### Query parameters
+
+<ParamField query="status" type="string">
+  Filter by status. One of: `DRAFT`, `PUBLISHED`, `SCHEDULED`, `ARCHIVED`.
+</ParamField>
+
+<ParamField query="type" type="string">
+  Filter by announcement type. One of: `ALERT`, `NEWS`, `INCIDENT`, `MAINTENANCE`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search in announcement title and content.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Sort field with direction prefix. Use `-` for descending (e.g. `-published_at`).
+</ParamField>
+
+<ParamField query="published_after" type="string">
+  Return announcements published after this date (ISO 8601).
+</ParamField>
+
+<ParamField query="published_before" type="string">
+  Return announcements published before this date (ISO 8601).
+</ParamField>
+
+<ParamField query="company_id" type="string">
+  Filter by company UUID.
+</ParamField>
+
+<ParamField query="page" type="number" default="1">
+  Page number (1-indexed).
+</ParamField>
+
+<ParamField query="per_page" type="number" placeholder="1-100">
+  Number of results per page. Maximum: 100.
+</ParamField>
+
+```bash Example
+curl -X GET "https://example.com/api/announcements?status=PUBLISHED&type=ALERT&per_page=20" \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+---
+
+## Get announcement
+
+```
+GET /api/announcements/{announcement}
+```
+
+Returns full details for a single announcement, including its metadata.
+
+### Path parameters
+
+<ParamField path="announcement" type="string" required>
+  Announcement UUID.
+</ParamField>
+
+---
+
+## Update announcement
+
+```
+PUT /api/announcements/{announcement}
+```
+
+Updates an existing announcement. The request body varies by announcement type.
+
+<Warning>
+  Only `DRAFT` and `SCHEDULED` announcements can be fully edited. A published `ALERT` can only update `ended_at`.
+</Warning>
+
+### Path parameters
+
+<ParamField path="announcement" type="string" required>
+  Announcement UUID.
+</ParamField>
+
+---
+
+## Delete announcement
+
+```
+DELETE /api/announcements/{announcement}
+```
+
+Permanently deletes an announcement.
+
+<Warning>
+  Only announcements with status `DRAFT` or `ARCHIVED` can be deleted.
+</Warning>
+
+### Path parameters
+
+<ParamField path="announcement" type="string" required>
+  Announcement UUID.
+</ParamField>
+
+---
+
+## Publish announcement
+
+```
+POST /api/announcements/{id}/publish
+```
+
+Immediately publishes a `DRAFT` or `SCHEDULED` announcement. Sets `published_at` to the current time. If the announcement was scheduled, the queued job is cancelled.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  Announcement UUID.
+</ParamField>
+
+```bash Example
+curl -X POST "https://example.com/api/announcements/550e8400-e29b-41d4-a716-446655440000/publish" \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+---
+
+## Schedule announcement
+
+```
+POST /api/announcements/{id}/schedule
+```
+
+Schedules a `DRAFT` announcement for future publication.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  Announcement UUID.
+</ParamField>
+
+### Body parameters
+
+<ParamField body="scheduled_for" type="string" required>
+  ISO 8601 datetime for publication. Must be between 5 minutes and 1 year in the future.
+</ParamField>
+
+---
+
+## Unschedule announcement
+
+```
+POST /api/announcements/{id}/unschedule
+```
+
+Cancels a scheduled publication and returns the announcement to `DRAFT` status. The queued job is also cancelled.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  Announcement UUID. Must be in `SCHEDULED` status.
+</ParamField>
+
+---
+
+## Archive announcement
+
+```
+POST /api/announcements/{id}/archive
+```
+
+Archives a `PUBLISHED` announcement. The `published_at` timestamp is preserved.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  Announcement UUID. Must be in `PUBLISHED` status.
+</ParamField>
+
+---
+
+## Restore announcement
+
+```
+POST /api/announcements/{id}/restore
+```
+
+Restores an `ARCHIVED` announcement to `DRAFT` status. Clears `published_at`.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  Announcement UUID. Must be in `ARCHIVED` status.
+</ParamField>
+
+---
+
+## Get metadata schemas
+
+```
+GET /api/announcements/schemas
+```
+
+Returns the metadata schema structure for each announcement type. Intended for frontend form generation.

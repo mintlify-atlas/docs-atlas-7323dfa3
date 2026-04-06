@@ -1,0 +1,330 @@
+---
+title: 'Announcement types'
+description: 'Create type-specific announcements for alerts, news, incidents, and maintenance. Each type has its own endpoint and metadata structure.'
+---
+
+Each announcement type is created via a dedicated endpoint. Use the `action` field to control whether the announcement is saved as a draft, published immediately, or scheduled.
+
+<Tabs>
+  <Tab title="Alert">
+
+## Create alert
+
+```
+POST /api/announcements/alerts
+```
+
+Creates an alert announcement for urgent security, system, service, or compliance issues.
+
+### Body parameters
+
+<ParamField body="title" type="string" required>
+  Title of the alert.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Main body content of the alert.
+</ParamField>
+
+<ParamField body="metadata.urgency" type="string" required>
+  Severity level. Must be `HIGH` or `CRITICAL`.
+</ParamField>
+
+<ParamField body="metadata.alert_type" type="string" required>
+  Category of the alert. One of: `security`, `system`, `service`, `compliance`.
+</ParamField>
+
+<ParamField body="metadata.message" type="string" required>
+  Short alert message displayed to users.
+</ParamField>
+
+<ParamField body="metadata.action_required" type="boolean">
+  Whether the recipient must take action. Defaults to `false`.
+</ParamField>
+
+<ParamField body="metadata.action_description" type="string">
+  Description of the required action. Required when `action_required` is `true`.
+</ParamField>
+
+<ParamField body="action" type="string" default="draft">
+  Disposition of the announcement after creation. One of: `draft`, `publish`, `schedule`.
+</ParamField>
+
+<ParamField body="scheduled_for" type="string">
+  ISO 8601 datetime for scheduled publication. Required when `action` is `schedule`.
+</ParamField>
+
+### Example request
+
+```json
+{
+  "title": "Security Breach Detected",
+  "content": "We have detected unauthorized access attempts...",
+  "metadata": {
+    "urgency": "CRITICAL",
+    "alert_type": "security",
+    "message": "Change your password immediately",
+    "action_required": true,
+    "action_description": "Go to security settings"
+  },
+  "action": "publish",
+  "scheduled_for": "2025-11-20T10:00:00Z"
+}
+```
+
+  </Tab>
+  <Tab title="News">
+
+## Create news
+
+```
+POST /api/announcements/news
+```
+
+Creates a news announcement for feature releases, policy updates, or general company updates.
+
+### Body parameters
+
+<ParamField body="title" type="string" required>
+  Title of the news announcement.
+</ParamField>
+
+<ParamField body="body" type="string" required>
+  Main body content of the news announcement.
+</ParamField>
+
+<ParamField body="metadata.news_type" type="string">
+  Category of the news. One of: `feature_release`, `policy_update`, `general_update`.
+</ParamField>
+
+<ParamField body="metadata.target_audience" type="string[]">
+  Audience segments to target. Array containing any of: `users`, `agents`, `admins`.
+</ParamField>
+
+<ParamField body="metadata.summary" type="string">
+  Brief summary of the announcement.
+</ParamField>
+
+<ParamField body="metadata.call_to_action" type="object">
+  Optional call-to-action button. Object with `text` (string) and `url` (string) properties.
+</ParamField>
+
+<ParamField body="action" type="string" default="draft">
+  Disposition of the announcement after creation. One of: `draft`, `publish`, `schedule`.
+</ParamField>
+
+<ParamField body="scheduled_for" type="string">
+  ISO 8601 datetime for scheduled publication. Required when `action` is `schedule`.
+</ParamField>
+
+### Example request
+
+```json
+{
+  "title": "New Feature Release: Dark Mode",
+  "body": "We are excited to announce dark mode...",
+  "metadata": {
+    "news_type": "feature_release",
+    "target_audience": ["users", "agents"],
+    "summary": "Dark mode now available",
+    "call_to_action": {
+      "text": "Try it now",
+      "url": "https://app.example.com/settings"
+    }
+  },
+  "action": "publish"
+}
+```
+
+  </Tab>
+  <Tab title="Incident">
+
+## Create incident
+
+```
+POST /api/announcements/incidents
+```
+
+Creates an incident announcement to communicate service disruptions or outages.
+
+### Body parameters
+
+<ParamField body="title" type="string" required>
+  Title of the incident.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Description of the incident.
+</ParamField>
+
+<ParamField body="urgency" type="string" required>
+  Severity of the incident. One of: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
+</ParamField>
+
+<ParamField body="is_resolved" type="boolean" required>
+  Whether the incident is already resolved at time of creation.
+</ParamField>
+
+<ParamField body="started_at" type="string">
+  ISO 8601 datetime when the incident began. Defaults to the current time.
+</ParamField>
+
+<ParamField body="ended_at" type="string">
+  ISO 8601 datetime when the incident ended. Optional.
+</ParamField>
+
+<ParamField body="affected_services" type="string[]">
+  List of service names affected by the incident.
+</ParamField>
+
+<ParamField body="action" type="string" default="draft">
+  Disposition of the announcement after creation. One of: `draft`, `publish`, `schedule`.
+</ParamField>
+
+<ParamField body="scheduled_for" type="string">
+  ISO 8601 datetime for scheduled publication. Required when `action` is `schedule`.
+</ParamField>
+
+### Example request
+
+```json
+{
+  "title": "Service Outage",
+  "content": "API service is experiencing issues...",
+  "urgency": "HIGH",
+  "is_resolved": false,
+  "started_at": "2025-11-17T08:00:00Z",
+  "affected_services": ["API", "Dashboard"],
+  "action": "publish"
+}
+```
+
+---
+
+## Resolve incident
+
+```
+POST /api/announcements/incidents/{id}/resolve
+```
+
+Marks an incident as resolved. Sets `is_resolved` to `true` and records `resolved_at` as the current time. Can only be called once per incident.
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  Incident announcement UUID.
+</ParamField>
+
+### Body parameters
+
+<ParamField body="resolution_content" type="string" required>
+  Description of what caused the incident and how it was resolved.
+</ParamField>
+
+<ParamField body="title" type="string">
+  Updated title for the announcement. Optional.
+</ParamField>
+
+<ParamField body="ended_at" type="string">
+  ISO 8601 datetime when the incident ended.
+</ParamField>
+
+  </Tab>
+  <Tab title="Maintenance">
+
+## Create maintenance
+
+```
+POST /api/announcements/maintenance
+```
+
+Creates a maintenance announcement for scheduled or emergency maintenance windows.
+
+### Body parameters
+
+<ParamField body="title" type="string" required>
+  Title of the maintenance announcement.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Description of the maintenance work.
+</ParamField>
+
+<ParamField body="urgency" type="string" required>
+  Urgency level. One of: `LOW`, `MEDIUM`, `HIGH`.
+</ParamField>
+
+<ParamField body="scheduled_start" type="string" required>
+  ISO 8601 datetime for the start of the maintenance window.
+</ParamField>
+
+<ParamField body="scheduled_end" type="string" required>
+  ISO 8601 datetime for the end of the maintenance window. Must be after `scheduled_start`.
+</ParamField>
+
+<ParamField body="is_emergency" type="boolean" required>
+  Whether this is an unplanned emergency maintenance event.
+</ParamField>
+
+<ParamField body="affected_services" type="string[]">
+  List of service names affected by the maintenance. Optional.
+</ParamField>
+
+<ParamField body="action" type="string" default="draft">
+  Disposition of the announcement after creation. One of: `draft`, `publish`, `schedule`.
+</ParamField>
+
+<ParamField body="scheduled_for" type="string">
+  ISO 8601 datetime for scheduled publication. Required when `action` is `schedule`.
+</ParamField>
+
+### Example request
+
+```json
+{
+  "title": "Server Maintenance",
+  "content": "Scheduled maintenance on servers...",
+  "urgency": "HIGH",
+  "scheduled_start": "2025-11-20T10:00:00Z",
+  "scheduled_end": "2025-11-20T12:00:00Z",
+  "is_emergency": false,
+  "affected_services": ["API", "Dashboard"],
+  "action": "publish",
+  "scheduled_for": "2025-11-20T09:00:00Z"
+}
+```
+
+---
+
+## Mark maintenance started
+
+```
+POST /api/announcements/maintenance/{announcement}/start
+```
+
+Records that the maintenance window has begun. Sets `actual_start` to the current time. Can only be called once.
+
+### Path parameters
+
+<ParamField path="announcement" type="string" required>
+  Maintenance announcement UUID.
+</ParamField>
+
+---
+
+## Mark maintenance completed
+
+```
+POST /api/announcements/maintenance/{announcement}/complete
+```
+
+Records that the maintenance window has ended. Sets `actual_end` to the current time. Requires `actual_start` to be set first and validates that the end time is after the start time.
+
+### Path parameters
+
+<ParamField path="announcement" type="string" required>
+  Maintenance announcement UUID.
+</ParamField>
+
+  </Tab>
+</Tabs>

@@ -1,0 +1,249 @@
+---
+title: "Docker Setup"
+description: "Run the Helpdesk platform locally using Docker Compose. Covers all services, port mappings, health checks, and common operational commands."
+keywords: ["docker", "docker compose", "setup", "development", "nginx", "postgres", "redis", "mailpit"]
+---
+
+The development environment runs entirely inside Docker Compose. Seven services start together, wait for their dependencies to become healthy, and expose the ports you need for day-to-day work.
+
+## Services
+
+<CardGroup cols={2}>
+  <Card title="app" icon="server">
+    PHP-FPM 8.3 application container. Serves as the Laravel runtime and the
+    dependency that `nginx`, `queue`, and `scheduler` all wait on before
+    starting.
+  </Card>
+  <Card title="nginx" icon="globe">
+    Nginx (Alpine) reverse proxy. Forwards HTTP requests to PHP-FPM and serves
+    static assets. Exposed on port **8000**.
+  </Card>
+  <Card title="postgres" icon="database">
+    PostgreSQL 17 (Alpine). Primary datastore with four schemas: `auth`,
+    `business`, `ticketing`, and `audit`. Creates the `helpdesk_test` database
+    automatically on first boot.
+  </Card>
+  <Card title="redis" icon="bolt">
+    Redis 8 (Alpine) with AOF persistence enabled. Shared by the cache, session,
+    and queue layers. Exposed on port **6379**.
+  </Card>
+  <Card title="queue" icon="list">
+    Dedicated Laravel queue worker. Processes `emails` and `default` queues with
+    priority ordering.
+  </Card>
+  <Card title="scheduler" icon="clock">
+    Laravel task scheduler running in a shell loop, executing
+    `schedule:run` every 60 seconds.
+  </Card>
+  <Card title="mailpit" icon="envelope">
+    Local SMTP server and web UI for capturing outgoing mail during development.
+    SMTP on port **1025**, web UI on port **8025**.
+  </Card>
+</CardGroup>
+
+## Port mappings
+
+| Service  | Host port | Container port | Purpose                   |
+| -------- | --------- | -------------- | ------------------------- |
+| nginx    | `8000`    | `80`           | Application HTTP           |
+| postgres | `5432`    | `5432`         | PostgreSQL connections     |
+| redis    | `6379`    | `6379`         | Redis connections          |
+| mailpit  | `1025`    | `1025`         | SMTP relay                 |
+| mailpit  | `8025`    | `8025`         | Mailpit web UI             |
+
+<Note>
+  In production (`docker-compose.prod.yml`) PostgreSQL and Redis ports are **not** exposed to the host. Only Nginx listens on ports 80 and 443.
+</Note>
+
+## Starting the development environment
+
+<Steps>
+  <Step title="Start all services">
+    ```bash
+    docker compose up -d
+    ```
+    Docker starts all seven services in dependency order. Health checks enforce
+    the correct startup sequence before dependent services launch.
+  </Step>
+
+  <Step title="Wait for healthy status">
+    ```bash
+    docker compose ps
+    ```
+    Wait until every service shows `healthy` or `running`. This typically takes
+    30–60 seconds on first boot while images are pulled and the database
+    initialises.
+  </Step>
+
+  <Step title="Run migrations and seed the database">
+    ```bash
+    docker compose exec app php artisan migrate --seed
+    ```
+    Migrations create all four PostgreSQL schemas and their tables. The seeder
+    populates roles, permissions, and sample data.
+  </Step>
+
+  <Step title="Optimise for performance (optional)">
+    ```bash
+    ./scripts/optimize-performance.sh
+    ```
+    Caches Laravel config, routes, and views, and warms the OPcache. Skip this
+    step if you need hot-reload behaviour for config or route changes during
+    development.
+  </Step>
+</Steps>
+
+## Common commands
+
+<CodeGroup>
+
+```bash Start
+docker compose up -d
+```
+
+```bash Stop
+docker compose down
+```
+
+```bash Rebuild after Dockerfile changes
+docker compose up -d --build
+```
+
+```bash View logs for a service
+docker compose logs -f app
+docker compose logs -f queue
+docker compose logs -f scheduler
+```
+
+```bash Open a shell in the app container
+docker compose exec app bash
+```
+
+```bash Run any Artisan command
+docker compose exec app php artisan <command>
+```
+
+```bash Access the PostgreSQL CLI
+docker compose exec postgres psql -U helpdesk -d helpdesk
+```
+
+```bash Access the Redis CLI
+docker compose exec redis redis-cli
+```
+
+</CodeGroup>
+
+## Health checks
+
+Every service declares a health check. Dependent services use
+`condition: service_healthy` so they only start once their dependencies are
+ready.
+
+<AccordionGroup>
+  <Accordion title="app (PHP-FPM)">
+    ```yaml
+    test: ["CMD-SHELL", "php-fpm -t"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    ```
+    Validates the PHP-FPM configuration. `nginx`, `queue`, and `scheduler` all
+    wait for this check before starting.
+  </Accordion>
+
+  <Accordion title="nginx">
+    ```yaml
+    test: ["CMD-SHELL", "test -f /var/run/nginx.pid"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    ```
+    Confirms the Nginx master process is running.
+  </Accordion>
+
+  <Accordion title="postgres">
+    ```yaml
+    test: ["CMD-SHELL", "pg_isready -U helpdesk -d helpdesk"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    ```
+    Uses `pg_isready` to confirm PostgreSQL is accepting connections. Checked
+    more frequently (every 10 s) because `app`, `queue`, and `scheduler` depend
+    on it.
+  </Accordion>
+
+  <Accordion title="redis">
+    ```yaml
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+    ```
+    Sends a `PING` command and expects a `PONG` response.
+  </Accordion>
+
+  <Accordion title="mailpit">
+    ```yaml
+    test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    ```
+    Performs an HTTP HEAD request against the Mailpit web UI endpoint.
+  </Accordion>
+</AccordionGroup>
+
+## Queue worker
+
+The `queue` container runs a persistent worker targeting the Redis connection:
+
+```bash
+php artisan queue:work redis --queue=emails,default --verbose --tries=3 --timeout=90
+```
+
+Queue priority is left-to-right: the `emails` queue (email verification, password resets) is always drained before `default` jobs are processed. Each job is retried up to **3 times** with a **90-second** execution timeout.
+
+<Tip>
+  Monitor failed jobs from inside the app container:
+
+  ```bash
+  docker compose exec app php artisan queue:failed
+  ```
+</Tip>
+
+## Scheduler
+
+The `scheduler` container runs `schedule:run` every minute via a shell loop:
+
+```bash
+sh -c "while true; do
+  php artisan schedule:run >> /dev/stdout 2>&1
+  sleep 60
+done"
+```
+
+Output is piped to stdout so it appears in `docker compose logs -f scheduler`. In production the output is redirected to `/var/www/storage/logs/scheduler.log` instead.
+
+## Persistent volumes
+
+Two named volumes preserve data across container restarts:
+
+| Volume          | Mounted at                    | Contents                   |
+| --------------- | ----------------------------- | -------------------------- |
+| `postgres_data` | `/var/lib/postgresql/data`    | All database files         |
+| `redis_data`    | `/data`                       | AOF persistence file       |
+
+<Warning>
+  Running `docker compose down -v` removes these volumes and permanently deletes
+  all database data. Omit the `-v` flag when you only want to stop containers.
+</Warning>
+
+## Access points
+
+| Resource          | URL                          |
+| ----------------- | ----------------------------- |
+| Application       | http://localhost:8000         |
+| Mailpit web UI    | http://localhost:8025         |
+| PostgreSQL        | `localhost:5432`              |
+| Redis             | `localhost:6379`              |

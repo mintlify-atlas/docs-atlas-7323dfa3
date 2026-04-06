@@ -1,0 +1,162 @@
+---
+title: "Ticket Attachments API"
+description: "Upload, list, download, and delete file attachments on tickets and individual responses."
+---
+
+All endpoints require a valid JWT in the `Authorization` header.
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+---
+
+## List attachments
+
+
+
+**GET /api/tickets/{ticket}/attachments**
+
+Return all attachments associated with a ticket.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Response
+
+Returns `200 OK` with an array of attachment metadata objects (filename, MIME type, size, upload timestamp, and download URL).
+
+---
+
+## Upload attachment to ticket
+
+
+
+**POST /api/tickets/{ticket}/attachments**
+
+Upload a file and attach it directly to a ticket.
+
+<Warning>
+**Limits:**
+- Maximum file size: **10 MB**
+- Maximum attachments per ticket: **5**
+
+Allowed file types: `pdf`, `txt`, `log`, `doc`, `docx`, `xls`, `xlsx`, `csv`, `jpg`, `jpeg`, `png`, `gif`, `bmp`, `webp`, `svg`, `mp4`
+</Warning>
+
+The request must use `Content-Type: multipart/form-data`.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Form fields
+
+<ParamField body="file" type="file" required>
+  The file to upload. Must be one of the allowed types and under 10 MB.
+</ParamField>
+
+### Response
+
+Returns `201 Created` with the attachment metadata object.
+
+```bash Example request
+curl --request POST \
+  --url 'https://your-domain.com/api/tickets/TKT-2025-00001/attachments' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  -F 'file=@/path/to/your/document.pdf'
+```
+
+---
+
+## Upload attachment to response
+
+
+
+**POST /api/tickets/{ticket}/responses/{response}/attachments**
+
+Upload a file and attach it to a specific response on a ticket.
+
+<Note>
+The same file size, file count, and file type limits apply as for ticket-level attachments.
+</Note>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+<ParamField path="response" type="string" required>
+  UUID of the response to attach the file to.
+</ParamField>
+
+### Form fields
+
+<ParamField body="file" type="file" required>
+  The file to upload. Must use `Content-Type: multipart/form-data`.
+</ParamField>
+
+### Response
+
+Returns `201 Created` with the attachment metadata object.
+
+```bash Example request
+curl --request POST \
+  --url 'https://your-domain.com/api/tickets/TKT-2025-00001/responses/a1b2c3d4-e5f6-7890-abcd-ef1234567890/attachments' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  -F 'file=@/path/to/screenshot.png'
+```
+
+---
+
+## Download attachment
+
+
+
+**GET /api/tickets/attachments/{attachment}/download**
+
+Download a file by its attachment UUID. Returns the raw file stream.
+
+<Note>
+The response is a file stream, not a JSON object. Your HTTP client should handle the response body as binary data and use the `Content-Disposition` header to determine the filename.
+</Note>
+
+### Path parameters
+
+<ParamField path="attachment" type="string" required>
+  UUID of the attachment to download.
+</ParamField>
+
+### Response
+
+Returns the file as a binary stream with appropriate `Content-Type` and `Content-Disposition` headers.
+
+---
+
+## Delete attachment
+
+
+
+**DELETE /api/tickets/{ticket}/attachments/{attachment}**
+
+Remove an attachment from a ticket.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+<ParamField path="attachment" type="string" required>
+  UUID of the attachment to delete.
+</ParamField>
+
+### Response
+
+Returns `200 OK` on success.

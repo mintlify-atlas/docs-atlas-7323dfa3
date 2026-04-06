@@ -1,97 +1,91 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to Helpdesk"
+description: "A multi-tenant enterprise helpdesk platform with JWT authentication, role-based access control, ticket management, announcements, and a help center — built on Laravel 12."
 ---
 
-## Setting up
+Helpdesk is a production-ready support platform that lets companies manage customer tickets, publish announcements, and maintain a self-serve help center — all from a single multi-tenant system. Whether you're an agent resolving tickets, a company admin managing your team, or a developer integrating via API, Helpdesk has you covered.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get the platform running in minutes with Docker and make your first API call.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the feature-first structure, multi-schema database, and service layers.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Ticket Management" icon="ticket" href="/features/ticket-management">
+    Create, assign, and resolve tickets with responses, attachments, and full lifecycle control.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/auth/register-login">
+    Explore the full REST API — authentication, tickets, announcements, users, and more.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get started in four steps
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Start the environment">
+    Clone the repository and bring up all services with Docker Compose.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+    ```bash
+    git clone https://github.com/Lukehowland/Helpdesk.git
+    cd Helpdesk
+    docker compose up -d
+    docker compose exec app php artisan migrate --seed
+    ```
+  </Step>
+  <Step title="Register and authenticate">
+    Create a user account and obtain a JWT access token for API calls.
 
-## Need inspiration?
+    ```bash
+    curl -X POST http://localhost:8000/api/auth/register \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "you@example.com",
+        "password": "SecurePass123!",
+        "passwordConfirmation": "SecurePass123!",
+        "firstName": "Jane",
+        "lastName": "Doe",
+        "acceptsTerms": true,
+        "acceptsPrivacyPolicy": true
+      }'
+    ```
+  </Step>
+  <Step title="Create your first ticket">
+    Submit a support ticket using your JWT token.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    ```bash
+    curl -X POST http://localhost:8000/api/tickets \
+      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "title": "Cannot access my account",
+        "description": "I get a 403 error when trying to log in.",
+        "category_id": "CATEGORY_UUID"
+      }'
+    ```
+  </Step>
+  <Step title="Explore the platform">
+    Check the API reference for all available endpoints, or dive into the feature guides to understand announcements, the help center, and company management.
+  </Step>
+</Steps>
+
+## Platform capabilities
+
+<CardGroup cols={2}>
+  <Card title="Announcements" icon="bullhorn" href="/features/announcements">
+    Publish alerts, news, incident reports, and maintenance notices with scheduling and targeting.
+  </Card>
+  <Card title="Help Center" icon="circle-question" href="/features/help-center">
+    Author and publish categorized articles for self-service support.
+  </Card>
+  <Card title="Company Management" icon="building" href="/features/company-management">
+    Manage multi-tenant companies with full data isolation and follower tracking.
+  </Card>
+  <Card title="Authentication & Roles" icon="shield-halved" href="/auth/overview">
+    Stateless JWT tokens, email verification, password reset, and four-tier RBAC.
+  </Card>
+</CardGroup>
+
+<Note>
+  Helpdesk is in active development. The core API, ticket system, announcements, and help center are fully operational. Real-time notifications and the React frontend migration are on the roadmap.
+</Note>

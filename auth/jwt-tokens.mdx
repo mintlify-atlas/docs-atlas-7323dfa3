@@ -1,0 +1,140 @@
+---
+title: 'JWT tokens'
+description: 'Access tokens, refresh tokens, session management, and security best practices.'
+keywords: ['JWT', 'access token', 'refresh token', 'token rotation', 'sessions']
+---
+
+The Helpdesk API issues two tokens on login: a short-lived **access token** for making API calls, and a long-lived **refresh token** for obtaining new access tokens.
+
+## Access token
+
+- **Lifetime:** 15 minutes
+- **Purpose:** Authenticate every API request
+- **Usage:** Passed as a `Bearer` token in the `Authorization` header
+
+```bash
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...
+```
+
+Access tokens cannot be revoked before they expire. Design your client to refresh them proactively before the 15-minute window closes.
+
+## Refresh token
+
+- **Lifetime:** 7 days
+- **Purpose:** Obtain a new access token without re-entering credentials
+- **Usage:** Sent only to `POST /api/auth/refresh` — never to any other endpoint
+
+<Warning>
+  Never send the refresh token to any endpoint other than `POST /api/auth/refresh`. Treat it as a long-lived credential.
+</Warning>
+
+## Refreshing an access token
+
+When the access token expires (or shortly before), call the refresh endpoint:
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.example.com/api/auth/refresh \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "refreshToken": "def50200abc123..."
+  }'
+```
+
+A successful response returns a new pair of tokens:
+
+```json
+{
+  "success": true,
+  "message": "Token refreshed successfully",
+  "data": {
+    "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+    "refreshToken": "def50200xyz456...",
+    "tokenType": "Bearer",
+    "expiresIn": 900
+  }
+}
+```
+
+## Token rotation
+
+Every call to `POST /api/auth/refresh` **invalidates the old refresh token** and issues a new one. You must store and use the latest refresh token from each response.
+
+<Tip>
+  If two requests attempt to refresh with the same token simultaneously, only one will succeed. Build retry logic around a 401 response to handle race conditions in multi-tab or multi-device scenarios.
+</Tip>
+
+## What to do when tokens expire
+
+<AccordionGroup>
+  <Accordion title="Access token expired (401 on a regular endpoint)">
+    Call `POST /api/auth/refresh` with your current refresh token. Use the new access token from the response to retry the original request.
+  </Accordion>
+  <Accordion title="Refresh token expired (401 on /api/auth/refresh)">
+    The session can no longer be renewed silently. Redirect the user to log in again with `POST /api/auth/login`.
+  </Accordion>
+</AccordionGroup>
+
+## Session management
+
+Each login creates a distinct session. You can list and revoke sessions independently — useful for building "sign out everywhere" features or reviewing active devices.
+
+### List active sessions
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.example.com/api/auth/sessions \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "9d4b1234-...",
+      "ipAddress": "203.0.113.42",
+      "userAgent": "Mozilla/5.0 (Macintosh; ...)",
+      "lastActivityAt": "2025-11-20T10:30:00Z",
+      "createdAt": "2025-11-19T08:00:00Z"
+    }
+  ]
+}
+```
+
+### Revoke a specific session
+
+```bash
+curl --request DELETE \
+  --url https://your-helpdesk.example.com/api/auth/sessions/9d4b1234-... \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+Revoking a session invalidates its refresh token immediately. The access token issued by that session will still be valid until its 15-minute lifetime ends.
+
+### Logout (revoke current session)
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.example.com/api/auth/logout \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+This revokes only the current session. Use `DELETE /api/auth/sessions/{sessionId}` to revoke other sessions.
+
+## Security best practices
+
+<CardGroup cols={2}>
+  <Card title="Store tokens securely" icon="lock">
+    Store tokens in memory or a secure, HttpOnly cookie. Avoid `localStorage` in browser environments — it is accessible to JavaScript running on the page.
+  </Card>
+  <Card title="Never log tokens" icon="eye-slash">
+    Ensure tokens are scrubbed from application logs, error reports, and analytics. A logged token is a leaked credential.
+  </Card>
+  <Card title="Rotate on every refresh" icon="rotate">
+    Always replace the stored refresh token after a successful refresh call. Using an old refresh token will result in a 401 error.
+  </Card>
+  <Card title="Revoke on logout" icon="right-from-bracket">
+    Call `POST /api/auth/logout` when the user explicitly signs out to immediately invalidate the current session's refresh token.
+  </Card>
+</CardGroup>

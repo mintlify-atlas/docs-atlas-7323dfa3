@@ -1,0 +1,168 @@
+---
+title: "Ticket Responses API"
+description: "Add, retrieve, update, and delete responses on support tickets. Responses are returned in chronological order."
+---
+
+All endpoints require a valid JWT in the `Authorization` header.
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+---
+
+## List responses
+
+
+
+**GET /api/tickets/{ticket}/responses**
+
+Return all responses for a ticket in chronological order.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Response
+
+Returns `200 OK` with an array of response objects, each including the author details and any associated attachments.
+
+```bash Example request
+curl --request GET \
+  --url 'https://your-domain.com/api/tickets/TKT-2025-00001/responses' \
+  --header 'Authorization: Bearer <jwt_token>'
+```
+
+---
+
+## Add response
+
+
+
+**POST /api/tickets/{ticket}/responses**
+
+Add a new response to a ticket.
+
+<Warning>
+You cannot respond to a ticket in `CLOSED` status. Attempting to do so will return a `422` error.
+</Warning>
+
+<Note>
+The `author_type` (`user` or `agent`) is determined automatically from the authenticated user's role — you do not need to include it in the request body.
+
+If an AGENT submits the **first** response on an unassigned ticket, the ticket is automatically assigned to that agent.
+</Note>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Body parameters
+
+<ParamField body="content" type="string" required>
+  The text content of the response.
+</ParamField>
+
+### Response
+
+Returns `201 Created` with the new response object.
+
+```bash Example request
+curl --request POST \
+  --url 'https://your-domain.com/api/tickets/TKT-2025-00001/responses' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "content": "Thank you for reaching out. We are investigating the issue and will update you shortly."
+  }'
+```
+
+---
+
+## Get response
+
+
+
+**GET /api/tickets/{ticket}/responses/{response}**
+
+Retrieve a single response by its UUID.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+<ParamField path="response" type="string" required>
+  UUID of the response.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the response object including author details and any attachments.
+
+---
+
+## Update response
+
+
+
+**PATCH /api/tickets/{ticket}/responses/{response}**
+
+Edit the content of an existing response.
+
+<Warning>
+Only the original author can update a response, and only within **30 minutes** of creation. Requests outside this window will be rejected.
+</Warning>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+<ParamField path="response" type="string" required>
+  UUID of the response to update.
+</ParamField>
+
+### Body parameters
+
+<ParamField body="content" type="string" required>
+  The updated text content of the response.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated response object.
+
+---
+
+## Delete response
+
+
+
+**DELETE /api/tickets/{ticket}/responses/{response}**
+
+Delete a response from a ticket.
+
+<Warning>
+Only the original author can delete a response, and only within **30 minutes** of creation. Requests outside this window will be rejected.
+</Warning>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+<ParamField path="response" type="string" required>
+  UUID of the response to delete.
+</ParamField>
+
+### Response
+
+Returns `200 OK` on success.

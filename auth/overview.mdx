@@ -1,0 +1,156 @@
+---
+title: 'Authentication overview'
+description: 'How to authenticate with the Helpdesk API using JWT tokens.'
+keywords: ['authentication', 'JWT', 'login', 'Bearer token', 'access token']
+---
+
+The Helpdesk API uses **stateless JWT authentication**. There are no server-side sessions — every request is authenticated using a short-lived access token passed in the `Authorization` header.
+
+## How it works
+
+<Steps>
+  <Step title="Register an account">
+    Send a `POST /api/auth/register` request with your email and password. A verification email is sent immediately.
+  </Step>
+  <Step title="Verify your email">
+    Click the link in the verification email, or send `POST /api/auth/email/verify` with the token from the email.
+  </Step>
+  <Step title="Log in">
+    Send `POST /api/auth/login` with your credentials. The response contains an `accessToken` and a `refreshToken`.
+  </Step>
+  <Step title="Make authenticated requests">
+    Pass the access token in the `Authorization` header on every protected request.
+  </Step>
+</Steps>
+
+## Getting a token
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.example.com/api/auth/login \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "email": "you@example.com",
+    "password": "your-password"
+  }'
+```
+
+A successful login returns:
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+    "refreshToken": "def50200abc123...",
+    "tokenType": "Bearer",
+    "expiresIn": 900
+  }
+}
+```
+
+## Using the token
+
+Include the access token as a `Bearer` token in the `Authorization` header on every authenticated request:
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.example.com/api/users/me \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+<Warning>
+  Never include your token in the URL as a query parameter. Always use the `Authorization` header.
+</Warning>
+
+## Token lifetimes
+
+<CardGroup cols={2}>
+  <Card title="Access token" icon="bolt">
+    Valid for **15 minutes**. Used for all authenticated API calls. Pass it as a Bearer token.
+  </Card>
+  <Card title="Refresh token" icon="rotate">
+    Valid for **7 days**. Used only to obtain a new access token. Never pass it to regular API endpoints.
+  </Card>
+</CardGroup>
+
+## Refreshing an access token
+
+When your access token expires, use your refresh token to get a new one without logging in again:
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.example.com/api/auth/refresh \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "refreshToken": "def50200abc123..."
+  }'
+```
+
+The response includes a new access token and a new refresh token (the old refresh token is invalidated):
+
+```json
+{
+  "success": true,
+  "message": "Token refreshed successfully",
+  "data": {
+    "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+    "refreshToken": "def50200xyz456...",
+    "tokenType": "Bearer",
+    "expiresIn": 900
+  }
+}
+```
+
+<Tip>
+  Refresh tokens are rotated on every use — a new refresh token is issued each time. Store the latest refresh token after every refresh call.
+</Tip>
+
+## Logging out
+
+To revoke the current session, call the logout endpoint with a valid access token:
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.example.com/api/auth/logout \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+This invalidates the current session's refresh token. Other active sessions (e.g., on other devices) remain valid until their tokens expire or are explicitly revoked.
+
+## Standard response format
+
+All API responses share a consistent envelope:
+
+```json
+{
+  "success": true,
+  "data": { },
+  "message": "Human-readable description"
+}
+```
+
+Error responses follow the same structure with `success: false`:
+
+```json
+{
+  "success": false,
+  "message": "Unauthenticated.",
+  "errors": { }
+}
+```
+
+## Error codes
+
+<AccordionGroup>
+  <Accordion title="401 Unauthenticated">
+    The request is missing a token, the token is malformed, or the token has expired. Refresh the access token or log in again.
+  </Accordion>
+  <Accordion title="403 Forbidden">
+    The token is valid but the authenticated user does not have permission to perform the requested action. Check that the user has the correct role for the endpoint.
+  </Accordion>
+  <Accordion title="422 Validation error">
+    The request body failed validation. The `errors` field in the response contains per-field messages.
+  </Accordion>
+</AccordionGroup>

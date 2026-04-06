@@ -1,0 +1,623 @@
+---
+title: "Users & Profiles"
+description: "Manage user accounts, profiles, preferences, and avatars. Includes admin-level user listing and status management."
+---
+
+All endpoints require a valid JWT access token unless otherwise noted. Include it as a Bearer token in every request:
+
+```bash
+Authorization: Bearer <your_access_token>
+```
+
+<Info>
+  **COMPANY_ADMIN scope** — A `COMPANY_ADMIN` can only see and act on users that belong to their own company. Attempting to access users from other companies returns `403 Forbidden`.
+</Info>
+
+---
+
+## Current user
+
+### Get current user
+
+<Info>Requires authentication.</Info>
+
+Returns the full profile, active role contexts, and activity statistics for the authenticated user.
+
+```bash
+GET /api/users/me
+```
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/users/me \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "id": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+    "userCode": "USR-20250001",
+    "email": "jane.doe@example.com",
+    "status": "ACTIVE",
+    "emailVerified": true,
+    "authProvider": null,
+    "profile": {
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "displayName": "Jane Doe",
+      "phoneNumber": "+1234567890",
+      "avatarUrl": "https://your-helpdesk.com/storage/avatars/9d4e.../avatar.jpg",
+      "theme": "light",
+      "language": "en",
+      "timezone": "America/New_York",
+      "pushWebNotifications": true,
+      "notificationsTickets": true,
+      "createdAt": "2025-01-15T10:30:00Z",
+      "updatedAt": "2025-11-01T14:25:30Z"
+    },
+    "roleContexts": [
+      {
+        "id": "7b5a4c3d-9e8f-1a2b-3c4d-5e6f7a8b9c0d",
+        "roleCode": "AGENT",
+        "roleName": "Agent",
+        "company": {
+          "id": "8c3d5e1f-2a4b-5c6d-7e8f-9a0b1c2d3e4f",
+          "name": "Acme Corporation"
+        },
+        "isActive": true,
+        "assignedAt": "2025-02-01T09:00:00Z"
+      }
+    ],
+    "ticketsCount": 42,
+    "resolvedTicketsCount": 38,
+    "averageRating": 4.5,
+    "lastLoginAt": "2025-11-01T08:00:00Z",
+    "lastActivityAt": "2025-11-01T14:22:10Z",
+    "createdAt": "2025-01-15T10:30:00Z",
+    "updatedAt": "2025-11-01T14:25:30Z"
+  }
+}
+```
+
+<ResponseField name="data" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">UUID of the user.</ResponseField>
+    <ResponseField name="userCode" type="string">Human-readable user code (e.g. `USR-20250001`).</ResponseField>
+    <ResponseField name="email" type="string">Email address.</ResponseField>
+    <ResponseField name="status" type="string">Account status: `ACTIVE`, `INACTIVE`, or `SUSPENDED`.</ResponseField>
+    <ResponseField name="emailVerified" type="boolean">Whether the email has been verified.</ResponseField>
+    <ResponseField name="authProvider" type="string | null">OAuth provider if applicable (e.g. `google`), otherwise `null`.</ResponseField>
+    <ResponseField name="profile" type="object">
+      <Expandable title="profile properties">
+        <ResponseField name="firstName" type="string">First name.</ResponseField>
+        <ResponseField name="lastName" type="string">Last name.</ResponseField>
+        <ResponseField name="displayName" type="string">Full display name (firstName + lastName).</ResponseField>
+        <ResponseField name="phoneNumber" type="string | null">Phone number.</ResponseField>
+        <ResponseField name="avatarUrl" type="string | null">URL of the avatar image.</ResponseField>
+        <ResponseField name="theme" type="string">UI theme preference: `light` or `dark`.</ResponseField>
+        <ResponseField name="language" type="string">Language preference: `en` or `es`.</ResponseField>
+        <ResponseField name="timezone" type="string">IANA timezone identifier.</ResponseField>
+        <ResponseField name="pushWebNotifications" type="boolean">Push web notifications enabled.</ResponseField>
+        <ResponseField name="notificationsTickets" type="boolean">Ticket notifications enabled.</ResponseField>
+        <ResponseField name="createdAt" type="string">ISO 8601 profile creation timestamp.</ResponseField>
+        <ResponseField name="updatedAt" type="string">ISO 8601 last update timestamp.</ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="roleContexts" type="array">Active role assignments. Each entry includes `roleCode`, `roleName`, optional `company` object, `isActive`, and `assignedAt`.</ResponseField>
+    <ResponseField name="ticketsCount" type="integer">Total tickets associated with this user.</ResponseField>
+    <ResponseField name="resolvedTicketsCount" type="integer">Number of resolved tickets.</ResponseField>
+    <ResponseField name="averageRating" type="number | null">Average agent rating, `null` if no ratings yet.</ResponseField>
+    <ResponseField name="lastLoginAt" type="string | null">ISO 8601 timestamp of last login.</ResponseField>
+    <ResponseField name="lastActivityAt" type="string | null">ISO 8601 timestamp of last activity.</ResponseField>
+    <ResponseField name="createdAt" type="string">ISO 8601 account creation timestamp.</ResponseField>
+    <ResponseField name="updatedAt" type="string">ISO 8601 last update timestamp.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### Get profile
+
+<Info>Requires authentication.</Info>
+
+Returns only the profile details (name, phone, avatar, theme, language, timezone, notifications) for the authenticated user.
+
+```bash
+GET /api/users/me/profile
+```
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/users/me/profile \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "displayName": "Jane Doe",
+    "phoneNumber": "+1234567890",
+    "avatarUrl": "https://your-helpdesk.com/storage/avatars/9d4e.../avatar.jpg",
+    "theme": "light",
+    "language": "en",
+    "timezone": "America/New_York",
+    "pushWebNotifications": true,
+    "notificationsTickets": true,
+    "createdAt": "2025-01-15T10:30:00Z",
+    "updatedAt": "2025-11-01T14:25:30Z"
+  }
+}
+```
+
+---
+
+### Update profile
+
+<Warning>
+  Throttled to **30 requests per hour** per authenticated user. Exceeding this limit returns `429 Too Many Requests`.
+</Warning>
+
+Updates the authenticated user's profile. All fields are optional — only the fields you send will be updated.
+
+```bash
+PATCH /api/users/me/profile
+```
+
+**Request body**
+
+<ParamField body="firstName" type="string">
+  First name. 2–100 characters.
+</ParamField>
+
+<ParamField body="lastName" type="string">
+  Last name. 2–100 characters.
+</ParamField>
+
+<ParamField body="phoneNumber" type="string">
+  Phone number. 10–20 characters. Digits, spaces, `+`, `-`, `(`, `)` allowed.
+</ParamField>
+
+<ParamField body="avatarUrl" type="string">
+  Avatar URL. Maximum 2048 characters.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request PATCH \
+  --url https://your-helpdesk.com/api/users/me/profile \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "phoneNumber": "+19876543210"
+  }'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "userId": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+    "profile": {
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "displayName": "Jane Smith",
+      "phoneNumber": "+19876543210",
+      "avatarUrl": null,
+      "theme": "light",
+      "language": "en",
+      "timezone": "America/New_York",
+      "pushWebNotifications": true,
+      "notificationsTickets": true,
+      "createdAt": "2025-01-15T10:30:00Z",
+      "updatedAt": "2025-11-01T15:45:20Z"
+    },
+    "updatedAt": "2025-11-01T15:45:20Z"
+  }
+}
+```
+
+---
+
+### Update preferences
+
+<Warning>
+  Throttled to **50 requests per hour** per authenticated user.
+</Warning>
+
+Updates language, timezone, and notification preferences. All fields are optional.
+
+```bash
+PATCH /api/users/me/preferences
+```
+
+**Request body**
+
+<ParamField body="theme" type="string">
+  UI theme: `light` or `dark`.
+</ParamField>
+
+<ParamField body="language" type="string">
+  Language code (ISO 639-1): `en` or `es`.
+</ParamField>
+
+<ParamField body="timezone" type="string">
+  IANA timezone identifier, e.g. `America/New_York`.
+</ParamField>
+
+<ParamField body="pushWebNotifications" type="boolean">
+  Enable or disable push web notifications.
+</ParamField>
+
+<ParamField body="notificationsTickets" type="boolean">
+  Enable or disable ticket notifications.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request PATCH \
+  --url https://your-helpdesk.com/api/users/me/preferences \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "theme": "dark",
+    "language": "en",
+    "timezone": "America/Chicago",
+    "pushWebNotifications": false,
+    "notificationsTickets": true
+  }'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "userId": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+    "preferences": {
+      "theme": "dark",
+      "language": "en",
+      "timezone": "America/Chicago",
+      "pushWebNotifications": false,
+      "notificationsTickets": true,
+      "updatedAt": "2025-11-01T16:20:15Z"
+    },
+    "updatedAt": "2025-11-01T16:20:15Z"
+  }
+}
+```
+
+---
+
+### Upload avatar
+
+<Warning>
+  Throttled to **3 requests per hour** per authenticated user.
+</Warning>
+
+Uploads a new avatar image for the authenticated user. Send as `multipart/form-data`. Supported formats: JPEG, PNG, GIF, WebP. Maximum file size: **5 MB**.
+
+```bash
+POST /api/users/me/avatar
+```
+
+**Request body (multipart/form-data)**
+
+<ParamField body="avatar" type="file" required>
+  Image file. Accepted formats: `image/jpeg`, `image/png`, `image/gif`, `image/webp`. Max size: 5 MB.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.com/api/users/me/avatar \
+  --header 'Authorization: Bearer <token>' \
+  --form 'avatar=@/path/to/photo.jpg'
+```
+
+**Response `200`**
+
+```json
+{
+  "message": "Avatar uploaded successfully",
+  "data": {
+    "avatarUrl": "https://your-helpdesk.com/storage/avatars/9d4e8c91.../1731774123_profile.jpg"
+  }
+}
+```
+
+---
+
+## View a user
+
+<Info>Requires authentication. Any user can view their own profile. Admins and agents can view users within their company.</Info>
+
+Returns the full user record for the given UUID.
+
+```bash
+GET /api/users/{id}
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  User UUID.
+</ParamField>
+
+**Authorization rules**
+
+| Role | Can view |
+|------|----------|
+| Any authenticated user | Their own profile |
+| `AGENT` | Users from their company |
+| `COMPANY_ADMIN` | Users from their company |
+| `PLATFORM_ADMIN` | Any user |
+
+**Example**
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.com/api/users/9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "id": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+    "userCode": "USR-20250001",
+    "email": "jane.doe@example.com",
+    "status": "ACTIVE",
+    "emailVerified": true,
+    "profile": { "..." : "..." },
+    "roleContexts": [],
+    "createdAt": "2025-01-15T10:30:00Z",
+    "updatedAt": "2025-11-01T14:25:30Z"
+  }
+}
+```
+
+---
+
+## Admin endpoints
+
+<Note>
+  The endpoints below require the `PLATFORM_ADMIN` or `COMPANY_ADMIN` role. A `COMPANY_ADMIN` automatically sees only users from their own company regardless of the filters applied.
+</Note>
+
+### List users
+
+Returns a paginated, filterable list of users.
+
+```bash
+GET /api/users
+```
+
+**Query parameters**
+
+<ParamField query="search" type="string">
+  Case-insensitive search across email, user code, first name, and last name.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by account status: `ACTIVE`, `INACTIVE`, or `SUSPENDED`.
+</ParamField>
+
+<ParamField query="emailVerified" type="boolean">
+  Filter by email verification status.
+</ParamField>
+
+<ParamField query="role" type="string">
+  Filter by role code: `USER`, `AGENT`, `COMPANY_ADMIN`, or `PLATFORM_ADMIN`.
+</ParamField>
+
+<ParamField query="companyId" type="string">
+  Filter users who have an active role in the specified company UUID.
+</ParamField>
+
+<ParamField query="recentActivity" type="boolean">
+  When `true`, returns only users active within the last 7 days.
+</ParamField>
+
+<ParamField query="createdAfter" type="string">
+  ISO 8601 datetime. Returns users created after this timestamp.
+</ParamField>
+
+<ParamField query="createdBefore" type="string">
+  ISO 8601 datetime. Returns users created before this timestamp.
+</ParamField>
+
+<ParamField query="order_by" type="string" default="created_at">
+  Sort field. One of: `created_at`, `updated_at`, `email`, `status`, `last_login_at`, `last_activity_at`.
+</ParamField>
+
+<ParamField query="order_direction" type="string" default="desc">
+  Sort direction: `asc` or `desc`.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number (1-indexed).
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Items per page. Maximum **50**.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request GET \
+  --url 'https://your-helpdesk.com/api/users?role=AGENT&status=ACTIVE&per_page=20' \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": [
+    {
+      "id": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+      "userCode": "USR-20250001",
+      "email": "jane.doe@example.com",
+      "status": "ACTIVE",
+      "emailVerified": true,
+      "profile": { "...": "..." },
+      "roleContexts": [],
+      "createdAt": "2025-01-15T10:30:00Z",
+      "updatedAt": "2025-11-01T14:25:30Z"
+    }
+  ],
+  "meta": {
+    "total": 156,
+    "per_page": 20,
+    "current_page": 1,
+    "last_page": 8
+  },
+  "links": {
+    "first": "https://your-helpdesk.com/api/users?page=1",
+    "last": "https://your-helpdesk.com/api/users?page=8",
+    "prev": null,
+    "next": "https://your-helpdesk.com/api/users?page=2"
+  }
+}
+```
+
+---
+
+### Update user status
+
+<Warning>
+  Requires `PLATFORM_ADMIN`. Only platform administrators can change user status.
+</Warning>
+
+Activates or suspends a user account.
+
+```bash
+PUT /api/users/{id}/status
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  User UUID.
+</ParamField>
+
+**Request body**
+
+<ParamField body="status" type="string" required>
+  New account status: `active` or `suspended`.
+</ParamField>
+
+<ParamField body="reason" type="string">
+  Required when `status` is `suspended`. Audit reason for the suspension.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request PUT \
+  --url https://your-helpdesk.com/api/users/9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b/status \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "status": "suspended",
+    "reason": "Violation of acceptable use policy"
+  }'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "userId": "9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b",
+    "status": "suspended",
+    "updatedAt": "2025-11-01T17:00:00Z"
+  }
+}
+```
+
+---
+
+### Delete user
+
+<Warning>
+  Requires `PLATFORM_ADMIN`. This is a **soft delete** — the user record is preserved for audit purposes but the account is deactivated. You cannot delete your own account.
+</Warning>
+
+Soft-deletes a user (sets `status` to `deleted` and records `deleted_at`).
+
+```bash
+DELETE /api/users/{id}
+```
+
+**Path parameters**
+
+<ParamField path="id" type="string" required>
+  User UUID.
+</ParamField>
+
+**Query parameters**
+
+<ParamField query="reason" type="string">
+  Optional reason for deletion. Logged in the audit trail when the audit feature is available.
+</ParamField>
+
+**Example**
+
+```bash
+curl --request DELETE \
+  --url 'https://your-helpdesk.com/api/users/9d4e8c91-5f2a-4b3e-8a1f-2c3d4e5f6a7b?reason=Account+closure+request' \
+  --header 'Authorization: Bearer <token>'
+```
+
+**Response `200`**
+
+```json
+{
+  "data": {
+    "success": true
+  }
+}
+```
+
+---
+
+## Error responses
+
+All endpoints follow a consistent error format:
+
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "code": "ERROR_CODE"
+}
+```
+
+| HTTP status | When it occurs |
+|-------------|---------------|
+| `401` | Missing or invalid JWT token |
+| `403` | Authenticated but insufficient permissions |
+| `404` | User not found |
+| `422` | Validation failed — `errors` object contains field-level messages |
+| `429` | Rate limit exceeded |

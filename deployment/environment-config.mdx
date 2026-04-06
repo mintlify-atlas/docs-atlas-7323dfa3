@@ -1,0 +1,215 @@
+---
+title: "Environment Configuration"
+description: "Reference for all environment variables used by the Helpdesk platform. Covers application settings, database, Redis, mail, JWT authentication, and the test environment."
+keywords: ["environment", ".env", "configuration", "database", "redis", "mail", "jwt", "dotenv"]
+---
+
+The platform uses a `.env` file for environment-specific configuration. Copy `.env.example` to `.env` and fill in the required values before starting the containers.
+
+```bash
+cp .env.example .env
+```
+
+<Note>
+  All Docker Compose services inject their own fixed environment variables (e.g.
+  `DB_HOST=postgres`) that override whatever is in `.env`. The values documented
+  here reflect the defaults in `.env.example` and what you will want to customise
+  for production.
+</Note>
+
+## Application settings
+
+These variables control the core Laravel application behaviour.
+
+| Variable                  | Default                  | Required | Description                                                  |
+| ------------------------- | ------------------------ | -------- | ------------------------------------------------------------ |
+| `APP_NAME`                | `"Helpdesk System"`      | Yes      | Display name used in email templates and the UI.             |
+| `APP_ENV`                 | `local`                  | Yes      | Environment name: `local`, `staging`, or `production`.       |
+| `APP_KEY`                 | _(empty)_                | Yes      | 32-byte application encryption key. Generate with `php artisan key:generate`. |
+| `APP_DEBUG`               | `true`                   | Yes      | Set to `false` in production to suppress stack traces.       |
+| `APP_URL`                 | `http://localhost:8000`  | Yes      | Canonical base URL. Used for link generation in emails.      |
+| `APP_LOCALE`              | `en`                     | No       | Default locale for translations.                             |
+| `APP_FALLBACK_LOCALE`     | `en`                     | No       | Fallback locale when a translation is missing.               |
+| `BCRYPT_ROUNDS`           | `12`                     | No       | Work factor for bcrypt password hashing.                     |
+| `PHP_CLI_SERVER_WORKERS`  | `4`                      | No       | Worker count for the PHP built-in server (dev only).         |
+
+<Warning>
+  Generate a fresh `APP_KEY` for every environment. Never share the same key
+  between development and production.
+
+  ```bash
+  docker compose exec app php artisan key:generate
+  ```
+</Warning>
+
+## Logging
+
+| Variable                      | Default   | Description                                              |
+| ----------------------------- | --------- | -------------------------------------------------------- |
+| `LOG_CHANNEL`                 | `stack`   | Primary log channel.                                     |
+| `LOG_STACK`                   | `single`  | Channels included in the `stack` channel.               |
+| `LOG_LEVEL`                   | `debug`   | Minimum log level. Set to `error` or `warning` in production. |
+| `LOG_DEPRECATIONS_CHANNEL`    | `null`    | Channel for PHP and Laravel deprecation notices.        |
+
+## Database
+
+The platform uses PostgreSQL 17 with four schemas. The Docker Compose file hardcodes the connection details for the `app` container, but these values should be set explicitly in `.env` for any workflow that runs Artisan outside of Docker.
+
+| Variable          | Default             | Required | Description                                     |
+| ----------------- | ------------------- | -------- | ----------------------------------------------- |
+| `DB_CONNECTION`   | `pgsql`             | Yes      | Driver. Must be `pgsql`.                        |
+| `DB_HOST`         | `postgres`          | Yes      | Hostname. Use `postgres` inside Docker, `127.0.0.1` for local PHP tooling. |
+| `DB_PORT`         | `5432`              | Yes      | PostgreSQL port.                                |
+| `DB_DATABASE`     | `helpdesk`          | Yes      | Primary database name.                          |
+| `DB_USERNAME`     | `helpdesk`          | Yes      | Database user.                                  |
+| `DB_PASSWORD`     | `helpdesk_password` | Yes      | Database password. **Change in production.**    |
+
+### PostgreSQL schemas
+
+The platform separates concerns across four PostgreSQL schemas. These variables configure which schema each domain uses:
+
+| Variable             | Default      | Description                                   |
+| -------------------- | ------------ | --------------------------------------------- |
+| `DB_SCHEMA_AUTH`     | `auth`       | Users, roles, permissions, sessions, tokens.  |
+| `DB_SCHEMA_BUSINESS` | `business`   | Companies, requests, industries, followers.   |
+| `DB_SCHEMA_TICKETING`| `ticketing`  | Tickets, responses, categories, ratings.      |
+| `DB_SCHEMA_AUDIT`    | `audit`      | System audit logs (planned).                  |
+
+### Test database
+
+Docker automatically creates a `helpdesk_test` database on first boot via the `create-multiple-databases.sh` init script. Configure the test connection separately:
+
+| Variable            | Default          | Description                             |
+| ------------------- | ---------------- | --------------------------------------- |
+| `DB_TEST_CONNECTION`| `pgsql`          | Driver for the test connection.         |
+| `DB_TEST_HOST`      | `postgres`       | Test database host.                     |
+| `DB_TEST_PORT`      | `5432`           | Test database port.                     |
+| `DB_TEST_DATABASE`  | `helpdesk_test`  | Isolated test database.                 |
+| `DB_TEST_USERNAME`  | `helpdesk`       | Test database user.                     |
+| `DB_TEST_PASSWORD`  | `helpdesk_password` | Test database password.              |
+
+<Tip>
+  The test environment is configured in `.env.testing`. PHPUnit reads this file
+  automatically when running `php artisan test`. Create it by copying `.env` and
+  pointing `DB_DATABASE` to `helpdesk_test`.
+</Tip>
+
+## Redis
+
+Redis is used for cache, sessions, and the job queue. All three layers share the same Redis instance by default.
+
+| Variable         | Default      | Required | Description                                             |
+| ---------------- | ------------ | -------- | ------------------------------------------------------- |
+| `REDIS_CLIENT`   | `phpredis`   | Yes      | PHP Redis client. `phpredis` is preferred over `predis`.|
+| `REDIS_HOST`     | `redis`      | Yes      | Hostname. Use `redis` inside Docker, `127.0.0.1` for external access. |
+| `REDIS_PORT`     | `6379`       | Yes      | Redis port.                                             |
+| `REDIS_PASSWORD` | `null`       | No       | Redis authentication password. **Required in production.** |
+
+## Cache
+
+| Variable       | Default           | Description                                                      |
+| -------------- | ----------------- | ---------------------------------------------------------------- |
+| `CACHE_STORE`  | `redis`           | Cache driver. `redis` is required for multi-container setups.    |
+| `CACHE_PREFIX` | `helpdesk_cache`  | Key prefix to namespace cache entries.                           |
+
+## Session
+
+| Variable            | Default   | Description                                                       |
+| ------------------- | --------- | ----------------------------------------------------------------- |
+| `SESSION_DRIVER`    | `redis`   | Session driver. Use `redis` to share sessions across containers.  |
+| `SESSION_LIFETIME`  | `120`     | Session lifetime in minutes.                                      |
+| `SESSION_ENCRYPT`   | `false`   | Encrypt session payload. Set to `true` in production.             |
+| `SESSION_DOMAIN`    | `null`    | Cookie domain. Set to your domain in production.                  |
+
+## Queue
+
+| Variable                 | Default   | Description                                            |
+| ------------------------ | --------- | ------------------------------------------------------ |
+| `QUEUE_CONNECTION`       | `redis`   | Queue driver. Must be `redis` for the queue worker.    |
+| `QUEUE_REDIS_CONNECTION` | `default` | Redis connection name used by the queue.               |
+
+## Mail
+
+In development, all outgoing mail is captured by Mailpit. The SMTP server runs on port `1025` and requires no credentials.
+
+| Variable             | Default                       | Description                                          |
+| -------------------- | ----------------------------- | ---------------------------------------------------- |
+| `MAIL_MAILER`        | `smtp`                        | Mail transport driver.                               |
+| `MAIL_HOST`          | `mailpit`                     | SMTP host. Use `mailpit` inside Docker.              |
+| `MAIL_PORT`          | `1025`                        | SMTP port for Mailpit.                               |
+| `MAIL_USERNAME`      | `null`                        | SMTP username. Not required by Mailpit.              |
+| `MAIL_PASSWORD`      | `null`                        | SMTP password. Not required by Mailpit.              |
+| `MAIL_ENCRYPTION`    | `null`                        | SMTP encryption. Set to `tls` for production SMTP.   |
+| `MAIL_FROM_ADDRESS`  | `"noreply@helpdesk.local"`    | Default sender address.                             |
+| `MAIL_FROM_NAME`     | `"${APP_NAME}"`               | Default sender name.                                 |
+
+<Info>
+  View captured emails in the Mailpit web UI at **http://localhost:8025**. All
+  messages sent from the application appear there in real time.
+</Info>
+
+## JWT authentication
+
+The API uses stateless JWT tokens. Access tokens expire after 15 minutes; refresh tokens are valid for 7 days (20,160 minutes).
+
+| Variable          | Default   | Required | Description                                                       |
+| ----------------- | --------- | -------- | ----------------------------------------------------------------- |
+| `JWT_SECRET`      | _(empty)_ | Yes      | HMAC signing secret. Generate with `php artisan jwt:secret`.     |
+| `JWT_TTL`         | `60`      | No       | Access token lifetime in minutes. Default is 60; the app enforces 15-minute expiry in code. |
+| `JWT_REFRESH_TTL` | `20160`   | No       | Refresh token lifetime in minutes (7 days).                      |
+
+<Warning>
+  `JWT_SECRET` must be set before the application can issue or verify tokens.
+  Generate it after setting `APP_KEY`:
+
+  ```bash
+  docker compose exec app php artisan jwt:secret
+  ```
+</Warning>
+
+## OAuth (optional)
+
+Google OAuth login is available but optional. Leave these empty to disable it.
+
+| Variable               | Default                                 | Description                         |
+| ---------------------- | --------------------------------------- | ----------------------------------- |
+| `GOOGLE_CLIENT_ID`     | _(empty)_                               | Google OAuth client ID.             |
+| `GOOGLE_CLIENT_SECRET` | _(empty)_                               | Google OAuth client secret.         |
+| `GOOGLE_REDIRECT_URI`  | `"${APP_URL}/auth/google/callback"`     | OAuth callback URL.                 |
+
+## Frontend build
+
+| Variable           | Default                      | Description                                      |
+| ------------------ | ---------------------------- | ------------------------------------------------ |
+| `VITE_APP_NAME`    | `"${APP_NAME}"`              | App name exposed to the Vite build.              |
+| `VITE_BACKEND_URL` | `http://localhost:8000`      | API base URL used by the frontend.               |
+
+## Development tools
+
+These are disabled by default and should remain disabled unless you are explicitly using them.
+
+| Variable             | Default | Description                     |
+| -------------------- | ------- | ------------------------------- |
+| `TELESCOPE_ENABLED`  | `false` | Laravel Telescope debugger.     |
+| `PULSE_ENABLED`      | `false` | Laravel Pulse monitoring UI.    |
+| `NIGHTWATCH_ENABLED` | `false` | Laravel Nightwatch browser testing. |
+
+## Production checklist
+
+Before deploying, verify the following values are changed from their development defaults:
+
+<AccordionGroup>
+  <Accordion title="Required changes for production">
+    - `APP_ENV=production`
+    - `APP_DEBUG=false`
+    - `APP_URL` — set to your real domain
+    - `APP_KEY` — generate a new key, never reuse the development key
+    - `DB_PASSWORD` — strong, unique password
+    - `REDIS_PASSWORD` — set a password; the production compose file passes this to `requirepass`
+    - `JWT_SECRET` — generate with `php artisan jwt:secret`
+    - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` — configure a real SMTP provider
+    - `LOG_LEVEL=error` — reduce log verbosity
+    - `SESSION_ENCRYPT=true` — encrypt session payloads
+    - `SESSION_DOMAIN` — set to your domain
+  </Accordion>
+</AccordionGroup>

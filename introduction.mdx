@@ -1,0 +1,52 @@
+---
+title: "Introduction"
+description: "Helpdesk is a multi-tenant enterprise support platform built on Laravel 12 with JWT authentication, role-based access control, ticket management, announcements, and a help center."
+---
+
+Helpdesk is a professional, multi-tenant support platform designed for organizations that need to manage customer and internal support at scale. Built on Laravel 12 with a feature-first architecture, it provides a complete REST API backed by PostgreSQL 17 and Redis, giving teams a reliable foundation for ticket workflows, company management, and content publishing. Every feature is self-contained and independently testable, making the codebase straightforward to extend and maintain.
+
+The platform targets three audiences: platform administrators who oversee the entire system and onboard companies, company administrators and agents who handle day-to-day support operations, and end users who submit tickets and browse the help center. Authentication is stateless JWT with short-lived access tokens and rotating refresh tokens, so the system scales horizontally without shared session state. A comprehensive test suite of 174+ tests and a 97% rated PostgreSQL schema design ensure the platform is production-ready from the start.
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Ticket management" icon="ticket" href="/features/ticket-management">
+    Create, assign, and track support tickets with categories, agent assignment, threaded responses, and file attachments.
+  </Card>
+  <Card title="Announcements" icon="bullhorn" href="/features/announcements">
+    Publish targeted announcements to users and companies with rich text support and file attachments.
+  </Card>
+  <Card title="Help center" icon="circle-question" href="/features/help-center">
+    Maintain a searchable library of help articles organized by category so users can self-serve before opening a ticket.
+  </Card>
+  <Card title="Company management" icon="building" href="/features/company-management">
+    Onboard and isolate companies with their own users, agents, and data. Includes a request and approval workflow and a follower system.
+  </Card>
+</CardGroup>
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Laravel 12 |
+| Language | PHP 8.3 (strict types) |
+| Database | PostgreSQL 17 — 4-schema multi-tenant design |
+| Cache & queues | Redis 8 |
+| Authentication | JWT (Firebase PHP-JWT) — 15 min access / 7 day refresh |
+| Frontend (current) | AdminLTE v3 + Blade + jQuery |
+| Frontend (planned) | React 19 + TypeScript + Inertia.js |
+| Infrastructure | Docker Compose (PHP-FPM, Nginx, PostgreSQL, Redis, Mailpit) |
+| Build tool | Vite 7 |
+
+## Roles
+
+Helpdesk uses role-based access control (RBAC) with four roles:
+
+- **PLATFORM_ADMIN** — Full system access. Manages companies, users, and platform-wide configuration.
+- **COMPANY_ADMIN** — Manages a single company's users, agents, tickets, and content.
+- **AGENT** — Handles ticket assignment and resolution within their assigned company.
+- **USER** — Submits tickets, reads announcements, and browses the help center.
+
+<Card title="Quick start" icon="rocket" href="/quickstart">
+  Get up and running with Docker in minutes.
+</Card>

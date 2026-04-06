@@ -1,0 +1,587 @@
+---
+title: 'Help Center Articles'
+description: 'Create, manage, and publish help center articles. Authenticated users see published articles; COMPANY_ADMINs can also access and manage drafts for their company.'
+---
+
+Help center articles are knowledge base entries that companies publish to assist their users. All authenticated users can read published articles. `COMPANY_ADMIN` users can create, edit, publish, unpublish, and delete draft articles within their own company.
+
+<Info>
+  All article write operations (`POST`, `PUT`, `DELETE`, and state transitions) require the `COMPANY_ADMIN` role. The `company_id` and `author_id` are always derived from the JWT token — you never need to send them in the request body.
+</Info>
+
+---
+
+## List articles
+
+<Warning>
+  Regular authenticated users only see `PUBLISHED` articles. `COMPANY_ADMIN` users see both `PUBLISHED` and `DRAFT` articles from their own company.
+</Warning>
+
+```bash
+GET /api/help-center/articles
+```
+
+### Query parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number for pagination (1-indexed).
+</ParamField>
+
+<ParamField query="per_page" type="number" default="15">
+  Number of items per page. Maximum: `100`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Case-insensitive search across `title` and `content` fields. Maximum 255 characters.
+</ParamField>
+
+<ParamField query="category" type="string">
+  Filter by category code. Must be one of:
+  - `ACCOUNT_PROFILE`
+  - `SECURITY_PRIVACY`
+  - `BILLING_PAYMENTS`
+  - `TECHNICAL_SUPPORT`
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by article status. Accepted values: `PUBLISHED`, `DRAFT`.
+
+  Defaults to `PUBLISHED` for regular users. `COMPANY_ADMIN` sees both statuses by default.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Sort field and direction. Prefix with `-` for descending order.
+
+  Accepted values: `title`, `-title`, `views`, `-views`, `created_at`, `-created_at`.
+</ParamField>
+
+<ParamField query="company_id" type="string">
+  Filter by company UUID. Only usable by the `COMPANY_ADMIN` of that company or a `PLATFORM_ADMIN`. Regular users cannot use this parameter.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  `true` on a successful response.
+</ResponseField>
+
+<ResponseField name="data" type="array" required>
+  Paginated array of article objects.
+
+  <Expandable title="article properties">
+    <ResponseField name="id" type="string" required>
+      Article UUID.
+    </ResponseField>
+    <ResponseField name="company_id" type="string" required>
+      UUID of the company that owns the article.
+    </ResponseField>
+    <ResponseField name="author_id" type="string" required>
+      UUID of the user who created the article.
+    </ResponseField>
+    <ResponseField name="category_id" type="string" required>
+      UUID of the help center category.
+    </ResponseField>
+    <ResponseField name="title" type="string" required>
+      Article title. Maximum 255 characters.
+    </ResponseField>
+    <ResponseField name="excerpt" type="string">
+      Short summary. Maximum 500 characters. `null` if not provided.
+    </ResponseField>
+    <ResponseField name="content" type="string" required>
+      Full article body.
+    </ResponseField>
+    <ResponseField name="status" type="string" required>
+      `DRAFT` or `PUBLISHED`.
+    </ResponseField>
+    <ResponseField name="views_count" type="number" required>
+      Number of times the article has been viewed while published.
+    </ResponseField>
+    <ResponseField name="published_at" type="string">
+      ISO 8601 timestamp of when the article was published. `null` for drafts.
+    </ResponseField>
+    <ResponseField name="created_at" type="string" required>
+      ISO 8601 creation timestamp.
+    </ResponseField>
+    <ResponseField name="updated_at" type="string" required>
+      ISO 8601 last-updated timestamp.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="meta" type="object" required>
+  Pagination metadata.
+
+  <Expandable title="meta properties">
+    <ResponseField name="current_page" type="number" required>Current page number.</ResponseField>
+    <ResponseField name="per_page" type="number" required>Items per page.</ResponseField>
+    <ResponseField name="total" type="number" required>Total number of matching articles.</ResponseField>
+    <ResponseField name="last_page" type="number" required>Last available page number.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+
+```bash List published articles
+curl --request GET \
+  --url 'https://your-domain.com/api/help-center/articles' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+```bash Filter by category and sort by views
+curl --request GET \
+  --url 'https://your-domain.com/api/help-center/articles?category=BILLING_PAYMENTS&sort=-views&per_page=20' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+```bash COMPANY_ADMIN — include drafts
+curl --request GET \
+  --url 'https://your-domain.com/api/help-center/articles?status=DRAFT' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "data": [
+    {
+      "id": "01921b2c-3d4e-7f89-a012-b3c4d5e6f7a8",
+      "company_id": "01921b2c-0000-7f89-a012-b3c4d5e6f7a8",
+      "author_id": "01921b2c-1111-7f89-a012-b3c4d5e6f7a8",
+      "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+      "title": "How to reset your password",
+      "excerpt": "A step-by-step guide to resetting your account password.",
+      "content": "Full article content...",
+      "status": "PUBLISHED",
+      "views_count": 142,
+      "published_at": "2025-03-15T10:00:00Z",
+      "created_at": "2025-03-10T08:00:00Z",
+      "updated_at": "2025-03-15T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "per_page": 15,
+    "total": 38,
+    "last_page": 3
+  }
+}
+```
+
+---
+
+## Create article
+
+Creates a new help center article. Articles are always created in `DRAFT` status — use the [publish endpoint](#publish-article) to make an article visible to users.
+
+<Note>
+  Requires `COMPANY_ADMIN` role. The `company_id` is automatically set from your JWT token; you do not need to provide it.
+</Note>
+
+```bash
+POST /api/help-center/articles
+```
+
+### Body parameters
+
+<ParamField body="category_id" type="string" required>
+  UUID of the help center category. Obtain valid category IDs from [`GET /api/help-center/categories`](/api/help-center/categories).
+</ParamField>
+
+<ParamField body="title" type="string" required>
+  Article title. Must be between 3 and 255 characters, and unique within your company.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Full article body. Must be between 50 and 20,000 characters.
+</ParamField>
+
+<ParamField body="excerpt" type="string">
+  Brief summary shown in listings. Maximum 500 characters. Optional.
+</ParamField>
+
+### Response
+
+Returns the created article object. The `status` is always `DRAFT`, `views_count` is `0`, and `published_at` is `null`.
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url 'https://your-domain.com/api/help-center/articles' \
+  --header 'Authorization: Bearer <your_jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+    "title": "How to enable two-factor authentication",
+    "content": "Two-factor authentication (2FA) adds an extra layer of security to your account. Follow these steps to enable it...",
+    "excerpt": "Learn how to secure your account with two-factor authentication."
+  }'
+```
+
+</CodeGroup>
+
+```json 201
+{
+  "success": true,
+  "data": {
+    "id": "01921b2c-aaaa-7f89-a012-b3c4d5e6f7a8",
+    "company_id": "01921b2c-0000-7f89-a012-b3c4d5e6f7a8",
+    "author_id": "01921b2c-1111-7f89-a012-b3c4d5e6f7a8",
+    "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+    "title": "How to enable two-factor authentication",
+    "excerpt": "Learn how to secure your account with two-factor authentication.",
+    "content": "Two-factor authentication (2FA) adds an extra layer of security...",
+    "status": "DRAFT",
+    "views_count": 0,
+    "published_at": null,
+    "created_at": "2025-04-06T12:00:00Z",
+    "updated_at": "2025-04-06T12:00:00Z"
+  }
+}
+```
+
+```json 422
+{
+  "success": false,
+  "message": "The given data was invalid.",
+  "errors": {
+    "category_id": ["The category_id field is required."],
+    "title": ["The title must be at least 3 characters."],
+    "content": ["The content must be at least 50 characters."]
+  }
+}
+```
+
+---
+
+## Get article
+
+Retrieves a single article by its UUID. Each call to a `PUBLISHED` article increments its `views_count` by 1. Calls to `DRAFT` articles do not affect the view count.
+
+```bash
+GET /api/help-center/articles/{id}
+```
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The UUID of the article to retrieve.
+</ParamField>
+
+### Access rules
+
+- Regular authenticated users can only retrieve `PUBLISHED` articles.
+- `COMPANY_ADMIN` users can retrieve both `PUBLISHED` and `DRAFT` articles belonging to their company.
+
+<CodeGroup>
+
+```bash cURL
+curl --request GET \
+  --url 'https://your-domain.com/api/help-center/articles/01921b2c-3d4e-7f89-a012-b3c4d5e6f7a8' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "message": "Article retrieved successfully",
+  "data": {
+    "id": "01921b2c-3d4e-7f89-a012-b3c4d5e6f7a8",
+    "company_id": "01921b2c-0000-7f89-a012-b3c4d5e6f7a8",
+    "author_id": "01921b2c-1111-7f89-a012-b3c4d5e6f7a8",
+    "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+    "title": "How to reset your password",
+    "excerpt": "A step-by-step guide to resetting your account password.",
+    "content": "Full article content...",
+    "status": "PUBLISHED",
+    "views_count": 143,
+    "published_at": "2025-03-15T10:00:00Z",
+    "created_at": "2025-03-10T08:00:00Z",
+    "updated_at": "2025-04-06T12:01:00Z"
+  }
+}
+```
+
+```json 404
+{
+  "success": false,
+  "message": "Article not found"
+}
+```
+
+---
+
+## Update article
+
+Updates an existing article. All fields are optional — only the fields you send will be changed. Both `DRAFT` and `PUBLISHED` articles can be updated. `published_at` and `views_count` are always preserved.
+
+<Note>
+  Requires `COMPANY_ADMIN` role. You can only update articles that belong to your company. Article titles must be unique within a company.
+</Note>
+
+```bash
+PUT /api/help-center/articles/{id}
+```
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The UUID of the article to update.
+</ParamField>
+
+### Body parameters
+
+<ParamField body="category_id" type="string">
+  UUID of the new help center category.
+</ParamField>
+
+<ParamField body="title" type="string">
+  Updated article title. Between 3 and 255 characters, and unique within your company.
+</ParamField>
+
+<ParamField body="content" type="string">
+  Updated article body. Between 50 and 20,000 characters.
+</ParamField>
+
+<ParamField body="excerpt" type="string">
+  Updated summary. Maximum 500 characters.
+</ParamField>
+
+<CodeGroup>
+
+```bash Update title and content
+curl --request PUT \
+  --url 'https://your-domain.com/api/help-center/articles/01921b2c-3d4e-7f89-a012-b3c4d5e6f7a8' \
+  --header 'Authorization: Bearer <your_jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "title": "How to reset your password (updated)",
+    "content": "Updated article content with clearer instructions..."
+  }'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "message": "Artículo actualizado exitosamente",
+  "data": {
+    "id": "01921b2c-3d4e-7f89-a012-b3c4d5e6f7a8",
+    "company_id": "01921b2c-0000-7f89-a012-b3c4d5e6f7a8",
+    "author_id": "01921b2c-1111-7f89-a012-b3c4d5e6f7a8",
+    "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+    "title": "How to reset your password (updated)",
+    "excerpt": "A step-by-step guide to resetting your account password.",
+    "content": "Updated article content with clearer instructions...",
+    "status": "PUBLISHED",
+    "views_count": 143,
+    "published_at": "2025-03-15T10:00:00Z",
+    "created_at": "2025-03-10T08:00:00Z",
+    "updated_at": "2025-04-06T13:00:00Z"
+  }
+}
+```
+
+```json 422
+{
+  "success": false,
+  "message": "The given data was invalid.",
+  "errors": {
+    "title": ["The title has already been taken."]
+  }
+}
+```
+
+---
+
+## Publish article
+
+Transitions an article from `DRAFT` to `PUBLISHED`. Sets `published_at` to the current timestamp and fires an `ArticlePublished` event. The article immediately becomes visible to users following your company.
+
+<Warning>
+  The article must be in `DRAFT` status. Calling this endpoint on an already-published article returns `400 Bad Request`.
+</Warning>
+
+```bash
+POST /api/help-center/articles/{id}/publish
+```
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The UUID of the article to publish.
+</ParamField>
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url 'https://your-domain.com/api/help-center/articles/01921b2c-aaaa-7f89-a012-b3c4d5e6f7a8/publish' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "message": "Artículo publicado exitosamente",
+  "data": {
+    "id": "01921b2c-aaaa-7f89-a012-b3c4d5e6f7a8",
+    "company_id": "01921b2c-0000-7f89-a012-b3c4d5e6f7a8",
+    "author_id": "01921b2c-1111-7f89-a012-b3c4d5e6f7a8",
+    "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+    "title": "How to enable two-factor authentication",
+    "excerpt": "Learn how to secure your account with two-factor authentication.",
+    "content": "Two-factor authentication (2FA) adds an extra layer of security...",
+    "status": "PUBLISHED",
+    "views_count": 0,
+    "published_at": "2025-04-06T14:00:00Z",
+    "created_at": "2025-04-06T12:00:00Z",
+    "updated_at": "2025-04-06T14:00:00Z"
+  }
+}
+```
+
+```json 400
+{
+  "success": false,
+  "message": "Article is already published"
+}
+```
+
+---
+
+## Unpublish article
+
+Reverts a `PUBLISHED` article back to `DRAFT` status. Sets `published_at` to `null`. The `views_count` is preserved. The article immediately becomes invisible to regular users.
+
+<Warning>
+  The article must be in `PUBLISHED` status. Calling this endpoint on a draft returns `400 Bad Request`.
+</Warning>
+
+```bash
+POST /api/help-center/articles/{id}/unpublish
+```
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The UUID of the article to unpublish.
+</ParamField>
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST \
+  --url 'https://your-domain.com/api/help-center/articles/01921b2c-aaaa-7f89-a012-b3c4d5e6f7a8/unpublish' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "message": "Artículo despublicado y regresado a borrador",
+  "data": {
+    "id": "01921b2c-aaaa-7f89-a012-b3c4d5e6f7a8",
+    "company_id": "01921b2c-0000-7f89-a012-b3c4d5e6f7a8",
+    "author_id": "01921b2c-1111-7f89-a012-b3c4d5e6f7a8",
+    "category_id": "01921b2c-2222-7f89-a012-b3c4d5e6f7a8",
+    "title": "How to enable two-factor authentication",
+    "excerpt": "Learn how to secure your account with two-factor authentication.",
+    "content": "Two-factor authentication (2FA) adds an extra layer of security...",
+    "status": "DRAFT",
+    "views_count": 57,
+    "published_at": null,
+    "created_at": "2025-04-06T12:00:00Z",
+    "updated_at": "2025-04-06T15:00:00Z"
+  }
+}
+```
+
+```json 400
+{
+  "success": false,
+  "message": "Article is not published"
+}
+```
+
+---
+
+## Delete article
+
+Soft-deletes a help center article. The record is retained in the database and can be recovered if needed, but it will no longer appear in any API responses.
+
+<Warning>
+  Only `DRAFT` articles can be deleted. Attempting to delete a `PUBLISHED` article returns `403 Forbidden` with the error code `CANNOT_DELETE_PUBLISHED_ARTICLE`. To delete a published article, [unpublish it](#unpublish-article) first, then delete it.
+</Warning>
+
+```bash
+DELETE /api/help-center/articles/{id}
+```
+
+### Path parameters
+
+<ParamField path="id" type="string" required>
+  The UUID of the article to delete.
+</ParamField>
+
+<CodeGroup>
+
+```bash cURL
+curl --request DELETE \
+  --url 'https://your-domain.com/api/help-center/articles/01921b2c-aaaa-7f89-a012-b3c4d5e6f7a8' \
+  --header 'Authorization: Bearer <your_jwt_token>'
+```
+
+</CodeGroup>
+
+```json 200
+{
+  "success": true,
+  "message": "Artículo eliminado permanentemente"
+}
+```
+
+```json 403
+{
+  "success": false,
+  "message": "No se puede eliminar un artículo publicado",
+  "code": "CANNOT_DELETE_PUBLISHED_ARTICLE"
+}
+```
+
+```json 404
+{
+  "success": false,
+  "message": "Article not found"
+}
+```
+
+---
+
+## Error responses
+
+All endpoints return errors in a consistent shape:
+
+```json
+{
+  "success": false,
+  "message": "Description of what went wrong"
+}
+```
+
+| Status | Meaning |
+| --- | --- |
+| `401` | Missing or invalid JWT token. |
+| `403` | Insufficient permissions, or attempting to delete a published article. |
+| `404` | Article not found or already deleted. |
+| `422` | Request body failed validation. Check the `errors` object for field-level details. |
+| `500` | Unexpected server error. |

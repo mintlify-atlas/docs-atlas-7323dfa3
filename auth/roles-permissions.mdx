@@ -1,0 +1,149 @@
+---
+title: 'Roles & permissions'
+description: 'The four roles in Helpdesk, what each can do, and how to assign and remove them.'
+keywords: ['roles', 'permissions', 'RBAC', 'PLATFORM_ADMIN', 'COMPANY_ADMIN', 'AGENT', 'USER']
+---
+
+Helpdesk uses role-based access control (RBAC) with four roles. Every authenticated user has at least one role, which determines what data they can read and what actions they can perform.
+
+## The four roles
+
+<CardGroup cols={2}>
+  <Card title="PLATFORM_ADMIN" icon="shield-halved">
+    Full system access. Creates and manages companies, approves company onboarding requests, and can manage all users across the platform.
+  </Card>
+  <Card title="COMPANY_ADMIN" icon="building">
+    Manages a single company. Controls tickets, announcements, help center articles, ticket categories, agents, and users within their company. Cannot access data from other companies.
+  </Card>
+  <Card title="AGENT" icon="headset">
+    Handles support tickets within their assigned company. Can resolve, close, reopen, and assign tickets, and post responses.
+  </Card>
+  <Card title="USER" icon="user">
+    A customer or end user. Can create and track their own tickets, and read published announcements and help center articles from companies they follow.
+  </Card>
+</CardGroup>
+
+## Permissions at a glance
+
+| Action | PLATFORM\_ADMIN | COMPANY\_ADMIN | AGENT | USER |
+|--------|:-:|:-:|:-:|:-:|
+| Create companies | ✓ | — | — | — |
+| Approve/reject company requests | ✓ | — | — | — |
+| Manage all users | ✓ | — | — | — |
+| Suspend/delete users | ✓ | — | — | — |
+| List and manage company tickets | ✓ | ✓ | — | — |
+| Delete closed tickets | — | ✓ | — | — |
+| Resolve tickets | — | ✓ | ✓ | — |
+| Close tickets | — | ✓ | ✓ | ✓ (own resolved only) |
+| Assign tickets to agents | — | ✓ | ✓ | — |
+| Create and manage announcements | — | ✓ | — | — |
+| Create and publish help center articles | — | ✓ | — | — |
+| Manage ticket categories | — | ✓ | — | — |
+| Assign/remove AGENT roles | — | ✓ | — | — |
+| Create tickets | — | — | — | ✓ |
+| Read own tickets | — | — | — | ✓ |
+| Read published announcements/articles | ✓ | ✓ | ✓ | ✓ |
+
+## Multi-tenant isolation
+
+`COMPANY_ADMIN` and `AGENT` roles are always scoped to a specific company via a `companyId`. A `COMPANY_ADMIN` can only see and manage data belonging to their own company — they cannot list users, tickets, or announcements from other companies.
+
+<Note>
+  The `company_id` is automatically inferred from the JWT on requests made by `COMPANY_ADMIN` and `AGENT` users. You do not need to pass `company_id` in the request body for most endpoints.
+</Note>
+
+## Role assignment
+
+Only `PLATFORM_ADMIN` and `COMPANY_ADMIN` users can assign roles.
+
+```bash
+curl --request POST \
+  --url https://your-helpdesk.example.com/api/users/{userId}/roles \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "roleCode": "AGENT",
+    "companyId": "9d4b1234-5678-..."
+  }'
+```
+
+```json
+{
+  "success": true,
+  "message": "Role assigned successfully",
+  "data": {
+    "id": "role-assignment-uuid",
+    "userId": "user-uuid",
+    "roleCode": "AGENT",
+    "companyId": "9d4b1234-5678-...",
+    "createdAt": "2025-11-20T10:00:00Z"
+  }
+}
+```
+
+Returns `201 Created` for a new assignment, or `200 OK` if a previously deactivated role assignment is reactivated.
+
+### companyId rules
+
+<AccordionGroup>
+  <Accordion title="AGENT and COMPANY_ADMIN — companyId required">
+    You must supply a valid `companyId`. The user becomes scoped to that company and cannot access data outside it.
+
+    ```json
+    { "roleCode": "AGENT", "companyId": "9d4b1234-5678-..." }
+    ```
+  </Accordion>
+  <Accordion title="USER and PLATFORM_ADMIN — companyId must be null">
+    These roles are not scoped to any company. Supplying a `companyId` will result in a validation error.
+
+    ```json
+    { "roleCode": "USER", "companyId": null }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Role removal
+
+To remove a role, pass the `UserRole` assignment ID (not the role's own ID):
+
+```bash
+curl --request DELETE \
+  --url https://your-helpdesk.example.com/api/users/roles/{roleId} \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+You can optionally provide a reason as a query parameter (maximum 500 characters):
+
+```bash
+curl --request DELETE \
+  --url 'https://your-helpdesk.example.com/api/users/roles/{roleId}?reason=Agent+left+the+team' \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+Role removal is a **soft delete** — the assignment is deactivated rather than permanently deleted. It can be reactivated by re-assigning the same role.
+
+<Warning>
+  A `COMPANY_ADMIN` can only remove role assignments that belong to users within their own company. Attempting to remove roles from another company's users will return a `403 Forbidden`.
+</Warning>
+
+## Listing available roles
+
+To retrieve all role codes available in the system:
+
+```bash
+curl --request GET \
+  --url https://your-helpdesk.example.com/api/roles \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
+```
+
+```json
+{
+  "success": true,
+  "data": [
+    { "code": "PLATFORM_ADMIN", "name": "Platform Administrator" },
+    { "code": "COMPANY_ADMIN", "name": "Company Administrator" },
+    { "code": "AGENT", "name": "Support Agent" },
+    { "code": "USER", "name": "User" }
+  ]
+}
+```

@@ -1,0 +1,362 @@
+---
+title: 'Sessions & Tokens'
+description: 'Refresh your access token, log out, list active sessions, and remotely revoke sessions on other devices.'
+---
+
+<Info>
+  Each session corresponds to one refresh token, which is typically tied to one device
+  or browser. A user can have multiple concurrent sessions.
+</Info>
+
+## Token lifecycle
+
+<Steps>
+  <Step title="Log in">
+    `POST /api/auth/login` returns an `accessToken` (15 min) and sets a `refresh_token`
+    HttpOnly cookie (30 days).
+  </Step>
+  <Step title="Make authenticated requests">
+    Send `Authorization: Bearer <accessToken>` on every protected API call.
+  </Step>
+  <Step title="Refresh before expiry">
+    Call `POST /api/auth/refresh` — the server reads the cookie, invalidates the old
+    refresh token, and issues a fresh pair. Token rotation is applied on every refresh.
+  </Step>
+  <Step title="Log out">
+    Call `POST /api/auth/logout` to revoke the current session, or pass `everywhere: true`
+    to revoke all sessions.
+  </Step>
+</Steps>
+
+---
+
+## POST /api/auth/refresh
+
+Issue a new access token and refresh token. The old refresh token is immediately
+invalidated (token rotation). The new refresh token is set as an HttpOnly cookie.
+
+**Authentication:** None — the refresh token is read from the `refresh_token` cookie.
+
+<Tip>
+  Browsers send the cookie automatically. For non-browser clients, pass the refresh
+  token via the `X-Refresh-Token` request header or the `refreshToken` body field. The
+  server checks in that priority order: header → cookie → body.
+</Tip>
+
+### Request headers (optional)
+
+<ParamField header="X-Refresh-Token" type="string">
+  Refresh token string. Useful for API clients and testing tools that cannot set
+  cookies. Takes priority over the cookie and body.
+</ParamField>
+
+### Request body (optional)
+
+<ParamField body="refreshToken" type="string">
+  Refresh token as a fallback when neither the header nor the cookie is available.
+  Not recommended for production use.
+</ParamField>
+
+### Response — 200 OK
+
+<ResponseField name="accessToken" type="string">
+  New JWT access token. Expires in 15 minutes.
+</ResponseField>
+
+<ResponseField name="tokenType" type="string">
+  Always `"Bearer"`.
+</ResponseField>
+
+<ResponseField name="expiresIn" type="number">
+  Access token lifetime in seconds.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable confirmation that the refresh token was rotated into the cookie.
+</ResponseField>
+
+The response also sets a new `Set-Cookie: refresh_token` header with `HttpOnly`,
+`Secure` (in production), and `SameSite=Strict` attributes. The old refresh token is
+permanently invalidated.
+
+### Error responses
+
+| Status | Code | When |
+| ------ | ---- | ---- |
+| `401` | `REFRESH_TOKEN_REQUIRED` | No refresh token found in header, cookie, or body |
+| `401` | `INVALID_REFRESH_TOKEN` | Token is expired, already used, or tampered |
+
+<CodeGroup>
+
+```bash cURL (cookie)
+# Browser / cookie-based — cookie is sent automatically
+curl --request POST \
+  --url https://your-domain.com/api/auth/refresh \
+  --cookie 'refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+```
+
+```bash cURL (header)
+# API client — pass token via header
+curl --request POST \
+  --url https://your-domain.com/api/auth/refresh \
+  --header 'X-Refresh-Token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="200 response example">
+    ```json
+    {
+      "accessToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+      "tokenType": "Bearer",
+      "expiresIn": 900,
+      "message": "Token refreshed successfully. New refresh token set in HttpOnly cookie."
+    }
+    ```
+  </Accordion>
+  <Accordion title="401 error example">
+    ```json
+    {
+      "message": "Invalid or expired refresh token. Please login again.",
+      "error": "INVALID_REFRESH_TOKEN"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## POST /api/auth/logout
+
+Revoke the current session (or all sessions) and clear the `refresh_token` cookie.
+
+**Authentication:** Required — `Authorization: Bearer <accessToken>`
+
+<Note>
+  To log out from a specific other device without ending the current session, use
+  `DELETE /api/auth/sessions/{sessionId}` instead.
+</Note>
+
+### Request body (optional)
+
+<ParamField body="everywhere" type="boolean" default="false">
+  When `true`, all sessions across all devices are revoked. When `false` (default),
+  only the current session is revoked.
+</ParamField>
+
+### Response — 200 OK
+
+<ResponseField name="success" type="boolean">
+  Always `true` on success.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation string, e.g. `"Logged out successfully"`.
+</ResponseField>
+
+The server also clears the `refresh_token` cookie by setting it with an expiry in the
+past.
+
+### Error responses
+
+| Status | When |
+| ------ | ---- |
+| `401` | Missing or invalid access token |
+
+<CodeGroup>
+
+```bash cURL (current session)
+curl --request POST \
+  --url https://your-domain.com/api/auth/logout \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...' \
+  --cookie 'refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+```
+
+```bash cURL (all devices)
+curl --request POST \
+  --url https://your-domain.com/api/auth/logout \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...' \
+  --header 'Content-Type: application/json' \
+  --data '{ "everywhere": true }'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="200 response example">
+    ```json
+    {
+      "success": true,
+      "message": "Logged out successfully"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## GET /api/auth/sessions
+
+Return all active (non-revoked, non-expired) sessions for the authenticated user,
+ordered by most recently used. The current session is flagged with `isCurrent: true`.
+
+**Authentication:** Required — `Authorization: Bearer <accessToken>`
+
+### Response — 200 OK
+
+<ResponseField name="sessions" type="object[]">
+  Array of active session objects.
+  <Expandable title="session properties">
+    <ResponseField name="sessionId" type="string">
+      UUID of the session. Use this value with `DELETE /api/auth/sessions/{sessionId}`
+      to revoke the session remotely.
+    </ResponseField>
+    <ResponseField name="deviceName" type="string | null">
+      Human-readable device label, e.g. `"Chrome on Windows"`.
+    </ResponseField>
+    <ResponseField name="ipAddress" type="string | null">
+      IP address recorded at login or last refresh.
+    </ResponseField>
+    <ResponseField name="userAgent" type="string | null">
+      Full User-Agent string.
+    </ResponseField>
+    <ResponseField name="lastUsedAt" type="string">
+      ISO 8601 timestamp of the last token refresh, or session creation if never
+      refreshed.
+    </ResponseField>
+    <ResponseField name="expiresAt" type="string">
+      ISO 8601 timestamp when the session (refresh token) expires.
+    </ResponseField>
+    <ResponseField name="isCurrent" type="boolean">
+      `true` when this session matches the refresh token in the current request's
+      cookie or `X-Refresh-Token` header.
+    </ResponseField>
+    <ResponseField name="location" type="null">
+      GeoIP location. Reserved for a future release — always `null`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error responses
+
+| Status | When |
+| ------ | ---- |
+| `401` | Missing or invalid access token |
+
+<CodeGroup>
+
+```bash cURL
+curl --request GET \
+  --url https://your-domain.com/api/auth/sessions \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="200 response example">
+    ```json
+    {
+      "sessions": [
+        {
+          "sessionId": "9d4e3c2a-8b7f-4e5d-9c8b-7a6f5e4d3c2b",
+          "deviceName": "Chrome on Windows",
+          "ipAddress": "192.168.1.1",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+          "lastUsedAt": "2025-11-01T12:00:00+00:00",
+          "expiresAt": "2025-12-01T12:00:00+00:00",
+          "isCurrent": true,
+          "location": null
+        },
+        {
+          "sessionId": "3a1b2c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+          "deviceName": "Safari on iOS",
+          "ipAddress": "10.0.0.42",
+          "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)...",
+          "lastUsedAt": "2025-10-30T08:15:00+00:00",
+          "expiresAt": "2025-11-29T08:15:00+00:00",
+          "isCurrent": false,
+          "location": null
+        }
+      ]
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## DELETE /api/auth/sessions/{sessionId}
+
+Revoke a specific session belonging to the authenticated user. The associated refresh
+token is invalidated and any access tokens issued from it are blacklisted.
+
+**Authentication:** Required — `Authorization: Bearer <accessToken>`
+
+<Warning>
+  You cannot revoke the session that is currently active (the one matching your current
+  refresh token). Use `POST /api/auth/logout` to end your own session.
+</Warning>
+
+### Path parameters
+
+<ParamField path="sessionId" type="string" required>
+  UUID of the session to revoke. Obtain this from `GET /api/auth/sessions`.
+</ParamField>
+
+### Response — 200 OK
+
+<ResponseField name="success" type="boolean">
+  Always `true` on success.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation string, e.g. `"Session revoked successfully"`.
+</ResponseField>
+
+### Error responses
+
+| Status | When |
+| ------ | ---- |
+| `401` | Missing or invalid access token |
+| `403` | Session belongs to a different user |
+| `404` | Session not found, or already revoked |
+| `409` | Attempting to revoke the current active session |
+
+<CodeGroup>
+
+```bash cURL
+curl --request DELETE \
+  --url https://your-domain.com/api/auth/sessions/3a1b2c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d \
+  --header 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+```
+
+</CodeGroup>
+
+<AccordionGroup>
+  <Accordion title="200 response example">
+    ```json
+    {
+      "success": true,
+      "message": "Session revoked successfully"
+    }
+    ```
+  </Accordion>
+  <Accordion title="409 conflict example (current session)">
+    ```json
+    {
+      "success": false,
+      "message": "Cannot revoke the current session. Use the logout endpoint instead."
+    }
+    ```
+  </Accordion>
+  <Accordion title="404 not found example">
+    ```json
+    {
+      "success": false,
+      "message": "Session not found or already revoked."
+    }
+    ```
+  </Accordion>
+</AccordionGroup>

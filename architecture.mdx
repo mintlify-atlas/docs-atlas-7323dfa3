@@ -1,0 +1,171 @@
+---
+title: "Architecture"
+description: "How Helpdesk is structured: feature-first modules, PostgreSQL multi-schema design, REST API conventions, and Docker services."
+---
+
+Helpdesk is organized around three main ideas: every domain concern lives in its own self-contained feature module, the database is split into purpose-specific PostgreSQL schemas, and the API follows strict REST conventions with consistent JSON shapes. This page explains each layer so you can navigate the codebase and extend it confidently.
+
+## Feature-first structure
+
+All business logic lives under `app/Features/`. Each top-level directory represents one domain and contains everything that domain needs — HTTP handlers, business logic, data models, authorization rules, and database migrations — without reaching into another feature's internals.
+
+**The five features:**
+
+| Feature | Responsibility |
+|---|---|
+| `Authentication` | JWT login, registration, email verification, password reset, session management |
+| `UserManagement` | User profiles, role assignment, RBAC |
+| `CompanyManagement` | Multi-tenant company onboarding, approval workflows, follower system |
+| `ContentManagement` | Announcements and help center articles |
+| `TicketManagement` | Ticket lifecycle, categories, responses, agent assignment, ratings |
+
+Every feature follows the same internal layout:
+
+```
+app/Features/[FeatureName]/
+├── Http/
+│   ├── Controllers/     # REST endpoints — validate input, delegate to services, return responses
+│   ├── Requests/        # Form request classes — validation rules and messages
+│   ├── Resources/       # JSON transformers — shape the API response
+│   └── Middleware/      # Feature-specific middleware
+├── Services/            # All business logic lives here
+├── Models/              # Eloquent models — data, relationships, scopes, casts only
+├── Policies/            # Authorization rules
+├── Events/              # Event data containers
+├── Listeners/           # Event handlers
+├── Jobs/                # Background jobs
+├── Enums/               # Type-safe backed enums
+└── Database/
+    ├── Migrations/      # Schema changes
+    ├── Seeders/         # Test and seed data
+    └── Factories/       # Model factories
+```
+
+## Separation of concerns
+
+The architecture enforces a strict one-way flow of responsibility. No layer does the job of another.
+
+| Layer | Responsibility |
+|---|---|
+| **Controllers** | Accept an HTTP request, validate it via a Form Request, call one Service method, return a Resource response. Zero business logic. |
+| **Services** | All create, update, delete, and calculation logic. The only layer that writes to the database or dispatches jobs. |
+| **Models** | Eloquent data definitions: fillable fields, casts, relationships, local scopes. No business logic. |
+| **Policies** | Answer one question: is this authenticated user allowed to perform this action on this model? |
+| **Resources** | Transform a Model or collection into the API's camelCase JSON shape. |
+
+## PostgreSQL multi-schema design
+
+The database uses four named schemas to enforce hard boundaries between domain data. Tables in one schema cannot accidentally join with unrelated tables in another.
+
+```
+helpdesk (database)
+├── auth        # Users, roles, permissions, sessions, refresh tokens (13 tables)
+├── business    # Companies, company requests, industries, followers (5 tables)
+├── ticketing   # Tickets, responses, categories, ratings
+└── audit       # System audit logs
+```
+
+**Schema details:**
+
+| Schema | Contains |
+|---|---|
+| `auth` | `users`, `roles`, `permissions`, `user_roles`, `sessions`, `refresh_tokens`, `email_verifications`, `password_resets` |
+| `business` | `companies`, `company_requests`, `industries`, `company_followers`, `company_industries` |
+| `ticketing` | `tickets`, `ticket_responses`, `ticket_categories`, `ticket_ratings`, `ticket_attachments` |
+| `audit` | `audit_logs` |
+
+All tables share a consistent set of professional PostgreSQL features:
+
+- **UUID primary keys** via the `HasUuid` trait
+- **ENUM types** for status fields and categorical values
+- **CITEXT** for case-insensitive email storage and lookup
+- **INET** for IP address columns
+- **JSONB** for flexible structured data (e.g., business hours)
+- **Partial indexes** for performance on filtered queries
+- **CHECK constraints** for business rule enforcement at the database level
+- **Soft deletes** via the `SoftDeletes` trait
+
+<Note>
+  The schema design received a 97% quality score (Senior/Lead level) in a professional database design review.
+</Note>
+
+## REST API design
+
+All routes are defined in `routes/api.php` and organized by feature.
+
+**Naming conventions:**
+
+- Route paths: kebab-case — `/api/ticket-categories`
+- JSON keys: camelCase — `userId`, `createdAt`
+- Database tables: snake_case — `user_profiles`
+- Database columns: snake_case — `created_at`
+
+**Standard success response:**
+
+```json
+{
+  "success": true,
+  "data": { },
+  "message": "Operation successful"
+}
+```
+
+**Standard error response:**
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": {
+    "email": ["The email field is required."]
+  }
+}
+```
+
+Additional API conventions:
+
+- Resource-based URLs: `/api/tickets`, `/api/companies`
+- Correct HTTP verbs: `GET`, `POST`, `PUT`/`PATCH`, `DELETE`
+- Rate limiting on sensitive endpoints (registration, login, password reset)
+- Comprehensive error handling with environment-aware detail
+
+## Frontend
+
+**Current implementation — AdminLTE v3 + Blade + jQuery:**
+
+Blade templates use AdminLTE v3 components for layout and UI. jQuery handles interactivity, Select2 for enhanced selects, and DataTables for paginated lists. Views are organized by role:
+
+```
+resources/views/
+├── layouts/
+│   ├── app.blade.php       # Authenticated layout
+│   ├── public.blade.php    # Public pages layout
+│   └── partials/
+├── app/
+│   └── [role]/             # admin / company / agent / user
+│       └── [feature]/
+│           └── partials/
+└── public/                 # Login, register
+```
+
+**Planned migration — React 19 + Inertia.js:**
+
+The frontend will migrate to React 19 with TypeScript and Inertia.js, removing the need for a separate API layer in the browser while keeping the same Laravel backend.
+
+## Docker services
+
+The full environment runs as seven Docker Compose services:
+
+| Service | Image | Role |
+|---|---|---|
+| `app` | PHP-FPM 8.3 | Runs the Laravel application |
+| `nginx` | Nginx Alpine | Web server and reverse proxy |
+| `postgres` | PostgreSQL 17 | Primary database |
+| `redis` | Redis 8 | Cache, session store, and queue backend |
+| `queue` | PHP-FPM 8.3 | Laravel queue worker (email and default queues) |
+| `scheduler` | PHP-FPM 8.3 | Laravel task scheduler (cron) |
+| `mailpit` | Mailpit | Catches all outbound email for local testing |
+
+<Tip>
+  To get the environment running, follow the [quick start guide](/quickstart).
+</Tip>

@@ -1,0 +1,324 @@
+---
+title: "Tickets API"
+description: "Create, retrieve, update, delete, and take action on support tickets. Role-based access controls what each user can see and do."
+---
+
+All endpoints require a valid JWT in the `Authorization` header.
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+<Note>
+**Role-based visibility:** USER sees only their own tickets. AGENT sees tickets assigned to them. COMPANY_ADMIN sees all tickets within their company.
+</Note>
+
+---
+
+## List tickets
+
+
+
+**GET /api/tickets**
+
+Returns a paginated list of tickets filtered by the caller's role and any query parameters provided.
+
+### Query parameters
+
+<ParamField query="status" type="string">
+  Filter by ticket status. One of: `OPEN`, `PENDING`, `RESOLVED`, `CLOSED`.
+</ParamField>
+
+<ParamField query="category_id" type="string">
+  Filter by category UUID.
+</ParamField>
+
+<ParamField query="owner_agent_id" type="string">
+  Filter by assigned agent. Pass a UUID to filter by a specific agent, `"null"` for unassigned tickets, or `"me"` for your own assignments.
+</ParamField>
+
+<ParamField query="created_by_user_id" type="string">
+  Filter by the UUID of the user who created the ticket.
+</ParamField>
+
+<ParamField query="last_response_author_type" type="string">
+  Filter by who last responded. One of: `user`, `agent`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Full-text search across ticket title and description.
+</ParamField>
+
+<ParamField query="created_from" type="string">
+  Return tickets created on or after this date (ISO 8601).
+</ParamField>
+
+<ParamField query="created_to" type="string">
+  Return tickets created on or before this date (ISO 8601).
+</ParamField>
+
+<ParamField query="sort_by" type="string">
+  Field name to sort results by.
+</ParamField>
+
+<ParamField query="sort_order" type="string" default="asc">
+  Sort direction. One of: `asc`, `desc`.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number (1-indexed).
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of tickets per page. Default and maximum vary by deployment.
+</ParamField>
+
+### Response
+
+Returns a paginated response with a `data` array of ticket objects and a `meta` object containing `current_page`, `per_page`, `total`, and `last_page`.
+
+```bash Example request
+curl --request GET \
+  --url 'https://your-domain.com/api/tickets?status=OPEN&sort_order=desc&page=1&per_page=20' \
+  --header 'Authorization: Bearer <jwt_token>'
+```
+
+---
+
+## Create ticket
+
+
+
+**POST /api/tickets**
+
+<Note>
+Only users with the USER role can create tickets.
+</Note>
+
+### Body parameters
+
+<ParamField body="title" type="string" required>
+  Short summary of the issue.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Full description of the issue.
+</ParamField>
+
+<ParamField body="category_id" type="string" required>
+  UUID of the ticket category.
+</ParamField>
+
+### Response
+
+Returns `201 Created` with the new ticket object. The response includes a `ticket_code` (e.g. `TKT-2025-00001`) used to reference the ticket in all subsequent requests.
+
+```bash Example request
+curl --request POST \
+  --url 'https://your-domain.com/api/tickets' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "title": "Cannot access my account",
+    "description": "I have been locked out since yesterday morning.",
+    "category_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }'
+```
+
+---
+
+## Get ticket
+
+
+
+**GET /api/tickets/{ticket}**
+
+Retrieve the full details of a single ticket.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  The ticket code (e.g. `TKT-2025-00001`). This is **not** the UUID — use the `ticket_code` value returned when the ticket was created.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the full ticket object.
+
+---
+
+## Update ticket
+
+
+
+**PATCH /api/tickets/{ticket}**
+
+Update the title or category of a ticket. Partial updates are supported — omit any field you do not want to change.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Body parameters
+
+<ParamField body="title" type="string">
+  Updated ticket title.
+</ParamField>
+
+<ParamField body="category_id" type="string">
+  UUID of the new category.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated ticket object.
+
+---
+
+## Delete ticket
+
+
+
+**DELETE /api/tickets/{ticket}**
+
+<Warning>
+This endpoint is restricted to COMPANY_ADMIN only. The ticket must be in `CLOSED` status before it can be deleted.
+</Warning>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Response
+
+Returns `200 OK` on success.
+
+---
+
+## Assign ticket
+
+
+
+**POST /api/tickets/{ticket}/assign**
+
+Assign a ticket to an agent.
+
+<Note>
+The agent must belong to the same company as the ticket.
+</Note>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Body parameters
+
+<ParamField body="owner_agent_id" type="string" required>
+  UUID of the agent to assign. The agent must be from the same company.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated ticket object.
+
+```bash Example request
+curl --request POST \
+  --url 'https://your-domain.com/api/tickets/TKT-2025-00001/assign' \
+  --header 'Authorization: Bearer <jwt_token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "owner_agent_id": "f1e2d3c4-b5a6-7890-abcd-ef1234567890"
+  }'
+```
+
+---
+
+## Resolve ticket
+
+
+
+**POST /api/tickets/{ticket}/resolve**
+
+Mark a ticket as resolved.
+
+<Note>
+Only AGENT and COMPANY_ADMIN roles can resolve tickets.
+</Note>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Body parameters
+
+<ParamField body="resolution_notes" type="string">
+  Optional notes describing how the issue was resolved.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated ticket object.
+
+---
+
+## Close ticket
+
+
+
+**POST /api/tickets/{ticket}/close**
+
+Close a ticket.
+
+<Warning>
+AGENT can close a ticket from any status. USER can only close a ticket that is already in `RESOLVED` status.
+</Warning>
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Body parameters
+
+<ParamField body="closing_notes" type="string">
+  Optional notes about why the ticket is being closed.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated ticket object.
+
+---
+
+## Reopen ticket
+
+
+
+**POST /api/tickets/{ticket}/reopen**
+
+Reopen a closed or resolved ticket.
+
+### Path parameters
+
+<ParamField path="ticket" type="string" required>
+  Ticket code (e.g. `TKT-2025-00001`).
+</ParamField>
+
+### Body parameters
+
+<ParamField body="reason" type="string">
+  Optional explanation for why the ticket is being reopened.
+</ParamField>
+
+### Response
+
+Returns `200 OK` with the updated ticket object.

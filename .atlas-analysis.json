@@ -1,0 +1,141 @@
+{
+  "projectType": "saas",
+  "projectName": "Helpdesk",
+  "projectDescription": "A multi-tenant enterprise helpdesk platform built with Laravel 12, offering JWT authentication, role-based access control, ticket management, announcements, and a help center.",
+  "theme": "almond",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/ticket-management",
+              "features/announcements",
+              "features/help-center",
+              "features/company-management"
+            ]
+          },
+          {
+            "group": "Authentication & Roles",
+            "pages": [
+              "auth/overview",
+              "auth/jwt-tokens",
+              "auth/roles-permissions"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker-setup",
+              "deployment/environment-config",
+              "deployment/performance"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/register-login",
+              "api/auth/sessions-tokens",
+              "api/auth/email-password"
+            ]
+          },
+          {
+            "group": "Tickets",
+            "pages": [
+              "api/tickets/tickets",
+              "api/tickets/responses",
+              "api/tickets/attachments",
+              "api/tickets/categories"
+            ]
+          },
+          {
+            "group": "Announcements",
+            "pages": [
+              "api/announcements/overview",
+              "api/announcements/types"
+            ]
+          },
+          {
+            "group": "Users & Companies",
+            "pages": [
+              "api/users/users-profiles",
+              "api/users/roles",
+              "api/companies/companies"
+            ]
+          },
+          {
+            "group": "Help Center",
+            "pages": [
+              "api/help-center/articles",
+              "api/help-center/categories"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-tenant company management with full data isolation",
+    "JWT stateless authentication with access and refresh tokens",
+    "Role-based access control (PLATFORM_ADMIN, COMPANY_ADMIN, AGENT, USER)",
+    "Comprehensive ticket lifecycle management with responses and attachments",
+    "Announcements system (alerts, news, incidents, maintenance) with scheduling",
+    "Help center with categorized articles and publish/draft workflow",
+    "PostgreSQL multi-schema design (auth, business, ticketing, audit)",
+    "Docker-based production-ready infrastructure with Redis caching",
+    "174+ automated tests with PHPUnit",
+    "OpenAPI/Swagger documentation"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/register",
+    "POST /api/auth/login",
+    "POST /api/auth/refresh",
+    "POST /api/auth/logout",
+    "GET /api/auth/status",
+    "GET /api/auth/sessions",
+    "GET /api/users/me",
+    "PATCH /api/users/me/profile",
+    "GET /api/users",
+    "GET /api/tickets",
+    "POST /api/tickets",
+    "GET /api/tickets/{ticket}",
+    "PATCH /api/tickets/{ticket}",
+    "POST /api/tickets/{ticket}/responses",
+    "POST /api/tickets/{ticket}/attachments",
+    "POST /api/tickets/{ticket}/resolve",
+    "POST /api/tickets/{ticket}/close",
+    "POST /api/tickets/{ticket}/assign",
+    "GET /api/announcements",
+    "POST /api/announcements/alerts",
+    "POST /api/announcements/news",
+    "POST /api/announcements/incidents",
+    "POST /api/announcements/maintenance",
+    "POST /api/announcements/{id}/publish",
+    "POST /api/announcements/{id}/schedule",
+    "GET /api/help-center/articles",
+    "POST /api/help-center/articles",
+    "POST /api/help-center/articles/{id}/publish",
+    "GET /api/companies",
+    "PATCH /api/companies/{company}",
+    "GET /api/tickets/categories",
+    "POST /api/tickets/categories"
+  ]
+}

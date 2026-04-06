@@ -1,0 +1,180 @@
+---
+title: "Company Management"
+description: "Understand the multi-tenant company model, including public discovery, follow functionality, branding uploads, and company request workflows."
+---
+
+The Helpdesk platform is multi-tenant. Each company is a fully isolated workspace with its own users, tickets, announcements, and help center content. Company data is never shared across tenants.
+
+## Company fields
+
+| Field | Description |
+|---|---|
+| `name` | Company display name |
+| `description` | Optional description of the company |
+| `website` | Company website URL |
+| `industry` | Industry category (see [industries](#industries)) |
+| `status` | `ACTIVE` or `INACTIVE` |
+
+## Role access summary
+
+| Action | Public | Authenticated user | COMPANY_ADMIN | PLATFORM_ADMIN |
+|---|---|---|---|---|
+| Browse minimal company list | Yes | Yes | Yes | Yes |
+| View company details | — | Yes | Yes | Yes |
+| Explore and follow companies | — | Yes | Yes | Yes |
+| Update company | — | — | Own company only | Any company |
+| Create company | — | — | — | Yes |
+| Upload branding | — | — | Own company only | Any company |
+| Approve/reject requests | — | — | — | Yes |
+
+---
+
+## Industries
+
+Industries are managed at the platform level and are publicly browseable, making them useful for registration and filtering flows.
+
+```bash
+curl --request GET \
+  --url https://your-domain.com/api/company-industries
+```
+
+No authentication is required.
+
+---
+
+## Public access
+
+Two endpoints are accessible without authentication:
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/companies/minimal` | Returns a minimal list of companies (id and name only) |
+| `GET /api/company-industries` | Returns the full list of available industries |
+
+These are intended for use in public-facing forms such as registration flows.
+
+---
+
+## Exploring and following companies
+
+Authenticated users can browse and follow companies.
+
+```bash
+# Browse all companies
+curl --request GET \
+  --url https://your-domain.com/api/companies/explore \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Follow a company
+curl --request POST \
+  --url https://your-domain.com/api/companies/COMPANY_UUID/follow \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Unfollow a company
+curl --request DELETE \
+  --url https://your-domain.com/api/companies/COMPANY_UUID/unfollow \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# List companies you follow
+curl --request GET \
+  --url https://your-domain.com/api/companies/followed \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Check if you follow a specific company
+curl --request GET \
+  --url https://your-domain.com/api/companies/COMPANY_UUID/is-following \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+<Info>
+  The follow endpoint is throttled to **20 requests per hour** per authenticated user.
+</Info>
+
+---
+
+## Company requests
+
+External users or prospective customers can submit a company creation request without logging in. PLATFORM_ADMINs review and approve or reject these requests.
+
+### Submitting a request
+
+`POST /api/company-requests` — public endpoint, no authentication required.
+
+<Warning>
+  This endpoint is rate-limited to **3 requests per hour** per IP address.
+</Warning>
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/company-requests \
+  --header "Content-Type: application/json" \
+  --data '{
+    "company_name": "Acme Corp",
+    "contact_email": "admin@acme.com",
+    "message": "We would like to use the Helpdesk platform for our team of 50."
+  }'
+```
+
+### Reviewing requests (PLATFORM_ADMIN)
+
+```bash
+# Approve a request
+curl --request POST \
+  --url https://your-domain.com/api/company-requests/REQUEST_UUID/approve \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Reject a request
+curl --request POST \
+  --url https://your-domain.com/api/company-requests/REQUEST_UUID/reject \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+---
+
+## Branding
+
+COMPANY_ADMINs and PLATFORM_ADMINs can upload a logo and favicon for their company. Both endpoints accept `multipart/form-data`.
+
+<Info>
+  Branding upload endpoints are throttled to **3 requests per hour**.
+</Info>
+
+### Upload logo
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/companies/COMPANY_UUID/logo \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --form "logo=@/path/to/logo.png"
+```
+
+### Upload favicon
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/companies/COMPANY_UUID/favicon \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --form "favicon=@/path/to/favicon.ico"
+```
+
+---
+
+## Updating company details
+
+`PUT /api/companies/{company}` or `PATCH /api/companies/{company}` — COMPANY_ADMIN can update their own company; PLATFORM_ADMIN can update any company.
+
+```bash
+curl --request PATCH \
+  --url https://your-domain.com/api/companies/COMPANY_UUID \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "name": "Acme Corporation",
+    "description": "Enterprise support platform for our customers.",
+    "website": "https://acme.com",
+    "industry_id": "INDUSTRY_UUID",
+    "status": "ACTIVE"
+  }'
+```
+
+All fields are optional for partial updates.

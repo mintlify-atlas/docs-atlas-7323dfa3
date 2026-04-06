@@ -1,0 +1,229 @@
+---
+title: "Ticket Management"
+description: "Manage the full lifecycle of support tickets, from creation through resolution and closure, with responses, attachments, and category organization."
+---
+
+Tickets are the core of the Helpdesk platform. Each ticket tracks a support request from submission through to closure, with a structured status flow, threaded responses, file attachments, and agent assignment.
+
+## Ticket lifecycle
+
+<Steps>
+  <Step title="Create (OPEN)">
+    A USER submits a ticket via `POST /api/tickets`. The ticket is assigned a unique code (e.g., `TKT-2025-00001`) and enters the `OPEN` status.
+  </Step>
+  <Step title="Agent responds (PENDING)">
+    When an agent posts the first response, the ticket transitions to `PENDING`. The responding agent is automatically assigned as the owner if the ticket is unassigned.
+  </Step>
+  <Step title="Resolve (RESOLVED)">
+    An AGENT or COMPANY_ADMIN marks the ticket resolved via `POST /api/tickets/{ticket}/resolve`, optionally adding resolution notes.
+  </Step>
+  <Step title="Close (CLOSED)">
+    The ticket is closed via `POST /api/tickets/{ticket}/close`. Users can only close tickets in `RESOLVED` status; agents can close tickets in any status.
+  </Step>
+</Steps>
+
+## Statuses
+
+| Status | Description |
+|---|---|
+| `OPEN` | Ticket submitted, awaiting agent response |
+| `PENDING` | Agent has responded, awaiting further action |
+| `RESOLVED` | Marked resolved by an agent or admin |
+| `CLOSED` | Fully closed; no further responses allowed |
+
+## Ticket codes
+
+Tickets are identified by a human-readable code in the format `TKT-YYYY-NNNNN` (e.g., `TKT-2025-00001`). Use this code in all URL paths — not the internal UUID.
+
+```bash
+# Correct
+GET /api/tickets/TKT-2025-00001
+
+# Incorrect
+GET /api/tickets/3f2504e0-4f89-11d3-9a0c-0305e82c3301
+```
+
+## Role permissions
+
+| Action | USER | AGENT | COMPANY_ADMIN |
+|---|---|---|---|
+| Create ticket | Yes | — | — |
+| View tickets | Own only | Company tickets | All company tickets |
+| Respond | Yes | Yes | Yes |
+| Assign ticket | — | Yes | Yes |
+| Resolve ticket | — | Yes | Yes |
+| Close ticket | RESOLVED only | Any status | Any status |
+| Reopen ticket | — | Yes | Yes |
+| Delete ticket | — | — | CLOSED only |
+
+---
+
+## Creating a ticket
+
+`POST /api/tickets` — requires `USER` role.
+
+<ParamField body="title" type="string" required>
+  Short, descriptive title for the support request.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Full description of the issue.
+</ParamField>
+
+<ParamField body="category_id" type="string" required>
+  UUID of the ticket category. Retrieve available categories from `GET /api/tickets/categories`.
+</ParamField>
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/tickets \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "title": "Cannot access my account",
+    "description": "I keep getting a 403 error when trying to log in since yesterday.",
+    "category_id": "c1a2b3c4-d5e6-7f89-a0b1-c2d3e4f5a6b7"
+  }'
+```
+
+## Viewing tickets
+
+`GET /api/tickets` — returns tickets based on the caller's role. COMPANY_ADMIN sees all company tickets; USERs see only their own.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `status` | string | Filter by `OPEN`, `PENDING`, `RESOLVED`, or `CLOSED` |
+| `category_id` | string | Filter by category UUID |
+| `owner_agent_id` | string | Agent UUID, `"me"` for your own, `"null"` for unassigned |
+| `search` | string | Search in title and description |
+| `created_from` | string | ISO 8601 start date |
+| `created_to` | string | ISO 8601 end date |
+| `page` | number | Page number (default: 1) |
+| `per_page` | number | Items per page |
+
+## Ticket actions
+
+### Assign
+
+`POST /api/tickets/{ticket}/assign` — AGENT or COMPANY_ADMIN only. The agent must belong to the same company.
+
+```json
+{
+  "owner_agent_id": "agent-uuid-here"
+}
+```
+
+### Resolve
+
+`POST /api/tickets/{ticket}/resolve` — AGENT or COMPANY_ADMIN only.
+
+```json
+{
+  "resolution_notes": "Reproduced and fixed the login error by resetting session tokens."
+}
+```
+
+### Close
+
+`POST /api/tickets/{ticket}/close`
+
+```json
+{
+  "closing_notes": "User confirmed the issue is resolved."
+}
+```
+
+### Reopen
+
+`POST /api/tickets/{ticket}/reopen` — moves the ticket back to `OPEN`.
+
+```json
+{
+  "reason": "The issue has returned after the fix was applied."
+}
+```
+
+---
+
+## Responses
+
+`POST /api/tickets/{ticket}/responses` — adds a threaded response to the ticket. Closed tickets cannot receive new responses.
+
+<ParamField body="content" type="string" required>
+  The text content of the response.
+</ParamField>
+
+<Info>
+  The author type (user or agent) is determined automatically from the caller's role. The first agent response auto-assigns the ticket if it is unassigned.
+</Info>
+
+Responses can be edited or deleted by their author **within 30 minutes** of creation.
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/tickets/TKT-2025-00001/responses \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "content": "Thanks for reaching out. Can you confirm which browser you are using and share any error messages you see?"
+  }'
+```
+
+---
+
+## Attachments
+
+`POST /api/tickets/{ticket}/attachments` — upload a file to a ticket using `multipart/form-data`.
+
+<Warning>
+  Each ticket is limited to **5 attachments**. Individual files may not exceed **10 MB**.
+</Warning>
+
+**Allowed file types:** `pdf`, `txt`, `log`, `doc`, `docx`, `xls`, `xlsx`, `csv`, `jpg`, `jpeg`, `png`, `gif`, `bmp`, `webp`, `svg`, `mp4`
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/tickets/TKT-2025-00001/attachments \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --form "file=@/path/to/error-screenshot.png"
+```
+
+You can also attach files directly to a specific response:
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/tickets/TKT-2025-00001/responses/RESPONSE_UUID/attachments \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --form "file=@/path/to/log-file.txt"
+```
+
+To download an attachment:
+
+```bash
+curl --request GET \
+  --url https://your-domain.com/api/tickets/attachments/ATTACHMENT_UUID/download \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --output downloaded-file.png
+```
+
+---
+
+## Categories
+
+Categories help organize tickets within a company. All authenticated users can read categories; only COMPANY_ADMIN can manage them.
+
+### Listing categories
+
+`GET /api/tickets/categories?company_id=YOUR_COMPANY_UUID`
+
+### Managing categories (COMPANY_ADMIN)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/tickets/categories` | Create a new category |
+| `PUT` | `/api/tickets/categories/{id}` | Update a category |
+| `DELETE` | `/api/tickets/categories/{id}` | Delete a category |
+
+<Warning>
+  Categories with active tickets (`OPEN`, `PENDING`, or `RESOLVED`) cannot be deleted.
+</Warning>

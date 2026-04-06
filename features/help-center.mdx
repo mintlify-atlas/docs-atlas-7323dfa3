@@ -1,0 +1,157 @@
+---
+title: "Help Center"
+description: "Create and publish knowledge base articles organized into global categories, giving users self-service answers to common questions."
+---
+
+The Help Center is a knowledge base where COMPANY_ADMINs publish articles to help users resolve common issues without opening a ticket. Articles are organized into four global categories and tracked by view count.
+
+All authenticated users can read `PUBLISHED` articles. Only COMPANY_ADMINs can create, edit, publish, or delete articles.
+
+## Categories
+
+Articles are organized into four fixed, platform-wide categories:
+
+<CardGroup cols={2}>
+  <Card title="Account & Profile" icon="user">
+    Account setup, profile management, and preferences.
+  </Card>
+  <Card title="Security & Privacy" icon="shield">
+    Passwords, two-factor authentication, and data privacy.
+  </Card>
+  <Card title="Billing & Payments" icon="credit-card">
+    Invoices, payment methods, and subscription management.
+  </Card>
+  <Card title="Technical Support" icon="wrench">
+    Troubleshooting guides and technical how-tos.
+  </Card>
+</CardGroup>
+
+Retrieve the category list and their UUIDs at any time:
+
+```bash
+GET /api/help-center/categories
+```
+
+## Article lifecycle
+
+<Steps>
+  <Step title="Create (DRAFT)">
+    Submit `POST /api/help-center/articles` with the required fields. Articles always start in `DRAFT` status and are not visible to regular users until published.
+  </Step>
+  <Step title="Edit">
+    Update draft content at any time using `PUT /api/help-center/articles/{id}`. Updates also work on already-published articles without changing their status.
+  </Step>
+  <Step title="Publish">
+    When the article is ready, call `POST /api/help-center/articles/{id}/publish`. The article becomes visible to all authenticated users and its `published_at` timestamp is recorded.
+  </Step>
+  <Step title="Unpublish (if needed)">
+    To pull an article from public view, call `POST /api/help-center/articles/{id}/unpublish`. The article returns to `DRAFT` status. View counts are preserved.
+  </Step>
+</Steps>
+
+---
+
+## Creating an article
+
+`POST /api/help-center/articles` — COMPANY_ADMIN only.
+
+<ParamField body="category_id" type="string" required>
+  UUID of one of the four global categories. Retrieve IDs from `GET /api/help-center/categories`.
+</ParamField>
+
+<ParamField body="title" type="string" required>
+  Article title. Must be unique within your company.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Full article body. Supports Markdown.
+</ParamField>
+
+<ParamField body="excerpt" type="string">
+  Optional short summary shown in article listings.
+</ParamField>
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/help-center/articles \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "category_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "title": "How to reset your password",
+    "content": "## Steps to reset your password\n\n1. Go to the login page.\n2. Click **Forgot password**.\n3. Enter your email address and click **Send reset link**.\n4. Check your inbox and follow the link within 1 hour.",
+    "excerpt": "A step-by-step guide to resetting your account password."
+  }'
+```
+
+---
+
+## Publishing an article
+
+`POST /api/help-center/articles/{id}/publish` — only works on articles in `DRAFT` status.
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/help-center/articles/ARTICLE_UUID/publish \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## Unpublishing an article
+
+`POST /api/help-center/articles/{id}/unpublish` — returns the article to `DRAFT`. Only works on `PUBLISHED` articles.
+
+```bash
+curl --request POST \
+  --url https://your-domain.com/api/help-center/articles/ARTICLE_UUID/unpublish \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+---
+
+## Updating an article
+
+`PUT /api/help-center/articles/{id}` — all fields are optional. Works on both `DRAFT` and `PUBLISHED` articles.
+
+<Info>
+  Updating a published article does not change its status or `published_at` timestamp.
+</Info>
+
+```bash
+curl --request PUT \
+  --url https://your-domain.com/api/help-center/articles/ARTICLE_UUID \
+  --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "title": "How to reset your password (updated)",
+    "excerpt": "Updated guide for resetting your account password."
+  }'
+```
+
+---
+
+## Deleting an article
+
+`DELETE /api/help-center/articles/{id}` — soft delete. Only `DRAFT` articles can be deleted.
+
+<Warning>
+  Published articles cannot be deleted. Unpublish the article first, then delete it.
+</Warning>
+
+---
+
+## Reading articles
+
+`GET /api/help-center/articles` — returns `PUBLISHED` articles to all authenticated users. COMPANY_ADMINs also see `DRAFT` articles from their company.
+
+<Info>
+  View counts are automatically incremented each time a `PUBLISHED` article is read via `GET /api/help-center/articles/{id}`.
+</Info>
+
+| Parameter | Type | Description |
+|---|---|---|
+| `search` | string | Search in title and content |
+| `category` | string | Filter by category slug: `ACCOUNT_PROFILE`, `SECURITY_PRIVACY`, `BILLING_PAYMENTS`, `TECHNICAL_SUPPORT` |
+| `status` | string | `PUBLISHED` or `DRAFT` (COMPANY_ADMIN only) |
+| `sort` | string | Sort field and direction, e.g. `-views` for most viewed first |
+| `page` | number | Page number (default: 1) |
+| `per_page` | number | Items per page (max: 100) |

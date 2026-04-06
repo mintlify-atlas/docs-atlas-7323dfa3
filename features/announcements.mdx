@@ -1,0 +1,264 @@
+---
+title: "Announcements"
+description: "Create and manage company-wide announcements including alerts, news, incidents, and scheduled maintenance windows."
+---
+
+Announcements let COMPANY_ADMINs communicate with all users through four distinct types: **ALERT**, **NEWS**, **INCIDENT**, and **MAINTENANCE**. Each type has its own fields and workflow.
+
+All authenticated users can read `PUBLISHED` announcements. Only COMPANY_ADMINs can create, update, or change the status of announcements.
+
+## Statuses
+
+| Status | Description |
+|---|---|
+| `DRAFT` | Created but not visible to users |
+| `PUBLISHED` | Live and visible to all authenticated users |
+| `SCHEDULED` | Queued for automatic publication at a future time |
+| `ARCHIVED` | Removed from public view; can be restored to `DRAFT` |
+
+## Announcement lifecycle
+
+<Steps>
+  <Step title="Create as DRAFT">
+    Submit a creation request to the type-specific endpoint (e.g., `POST /api/announcements/alerts`). By default, the announcement is saved as `DRAFT`. Include `"action": "publish"` or `"action": "schedule"` in the request body to skip the draft step.
+  </Step>
+  <Step title="Publish immediately or schedule">
+    To publish a draft immediately, call `POST /api/announcements/{id}/publish`. To schedule it, call `POST /api/announcements/{id}/schedule` with a `scheduled_for` timestamp between 5 minutes and 1 year in the future. You can also unschedule a `SCHEDULED` announcement to return it to `DRAFT`.
+  </Step>
+  <Step title="Archive or restore">
+    Published announcements can be archived via `POST /api/announcements/{id}/archive`. Archived announcements can be restored to `DRAFT` via `POST /api/announcements/{id}/restore`.
+  </Step>
+</Steps>
+
+## The `action` field
+
+All creation endpoints accept an optional `action` field:
+
+| Value | Effect |
+|---|---|
+| Omitted | Saves as `DRAFT` |
+| `"publish"` | Publishes immediately |
+| `"schedule"` | Schedules for `scheduled_for` (required) |
+
+<Info>
+  `scheduled_for` must be an ISO 8601 timestamp between **5 minutes and 1 year** in the future.
+</Info>
+
+---
+
+## Listing announcements
+
+`GET /api/announcements` — returns announcements filtered by the caller's role. COMPANY_ADMINs see all statuses; regular users see only `PUBLISHED`.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `status` | string | `DRAFT`, `PUBLISHED`, `SCHEDULED`, or `ARCHIVED` |
+| `type` | string | `ALERT`, `NEWS`, `INCIDENT`, or `MAINTENANCE` |
+| `search` | string | Search in title and content |
+| `published_after` | string | ISO 8601 date filter |
+| `published_before` | string | ISO 8601 date filter |
+| `page` | number | Page number (default: 1) |
+| `per_page` | number | Items per page (max: 100) |
+
+---
+
+## Announcement types
+
+<AccordionGroup>
+  <Accordion title="ALERT" icon="triangle-exclamation">
+    Use alerts for urgent, time-sensitive communications that require user awareness or action.
+
+    **Endpoint:** `POST /api/announcements/alerts`
+
+    <ParamField body="title" type="string" required>
+      Short title for the alert.
+    </ParamField>
+    <ParamField body="content" type="string" required>
+      Full alert message.
+    </ParamField>
+    <ParamField body="metadata.urgency" type="string" required>
+      `HIGH` or `CRITICAL`.
+    </ParamField>
+    <ParamField body="metadata.alert_type" type="string" required>
+      One of: `security`, `system`, `service`, `compliance`.
+    </ParamField>
+    <ParamField body="metadata.action_required" type="boolean">
+      Whether users must take an action.
+    </ParamField>
+    <ParamField body="metadata.action_description" type="string">
+      Required when `action_required` is `true`. Describes what the user should do.
+    </ParamField>
+    <ParamField body="action" type="string">
+      `"publish"`, `"schedule"`, or omit for draft.
+    </ParamField>
+
+    ```bash
+    curl --request POST \
+      --url https://your-domain.com/api/announcements/alerts \
+      --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+      --header "Content-Type: application/json" \
+      --data '{
+        "title": "Security Alert: Unusual Login Activity",
+        "content": "We have detected unusual login attempts on some accounts.",
+        "metadata": {
+          "urgency": "CRITICAL",
+          "alert_type": "security",
+          "action_required": true,
+          "action_description": "Review your recent sessions and change your password."
+        },
+        "action": "publish"
+      }'
+    ```
+  </Accordion>
+
+  <Accordion title="NEWS" icon="newspaper">
+    Use news announcements for product updates, policy changes, and general company communications.
+
+    **Endpoint:** `POST /api/announcements/news`
+
+    <ParamField body="title" type="string" required>
+      News headline.
+    </ParamField>
+    <ParamField body="body" type="string" required>
+      Full news content.
+    </ParamField>
+    <ParamField body="metadata.news_type" type="string" required>
+      One of: `feature_release`, `policy_update`, `general_update`.
+    </ParamField>
+    <ParamField body="metadata.target_audience" type="string[]">
+      Array of audience segments: `"users"`, `"agents"`, `"admins"`.
+    </ParamField>
+    <ParamField body="metadata.summary" type="string">
+      Brief summary shown in list views.
+    </ParamField>
+    <ParamField body="metadata.call_to_action" type="object">
+      Optional CTA with `text` and `url` fields.
+    </ParamField>
+    <ParamField body="action" type="string">
+      `"publish"`, `"schedule"`, or omit for draft.
+    </ParamField>
+
+    ```bash
+    curl --request POST \
+      --url https://your-domain.com/api/announcements/news \
+      --header "Authorization: Bearer YOUR_JWT_TOKEN" \
+      --header "Content-Type: application/json" \
+      --data '{
+        "title": "Dark Mode Is Now Available",
+        "body": "You can now switch to dark mode from your account preferences.",
+        "metadata": {
+          "news_type": "feature_release",
+          "target_audience": ["users", "agents"],
+          "summary": "Dark mode is available in account settings.",
+          "call_to_action": {
+            "text": "Try it now",
+            "url": "https://app.example.com/settings/appearance"
+          }
+        },
+        "action": "publish"
+      }'
+    ```
+  </Accordion>
+
+  <Accordion title="INCIDENT" icon="circle-exclamation">
+    Use incident announcements to communicate service disruptions in real time.
+
+    **Endpoint:** `POST /api/announcements/incidents`
+
+    <ParamField body="title" type="string" required>
+      Incident title.
+    </ParamField>
+    <ParamField body="content" type="string" required>
+      Description of the incident and current impact.
+    </ParamField>
+    <ParamField body="urgency" type="string" required>
+      One of: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
+    </ParamField>
+    <ParamField body="affected_services" type="string[]" required>
+      List of affected service names, e.g. `["API", "Dashboard"]`.
+    </ParamField>
+    <ParamField body="started_at" type="string">
+      ISO 8601 timestamp when the incident started. Defaults to the current time.
+    </ParamField>
+    <ParamField body="action" type="string">
+      `"publish"`, `"schedule"`, or omit for draft.
+    </ParamField>
+
+    Once the incident is resolved, call the dedicated resolve endpoint:
+
+    **`POST /api/announcements/incidents/{id}/resolve`**
+
+    ```json
+    {
+      "resolution_content": "The API latency was caused by a misconfigured load balancer. The issue has been corrected and all services are operating normally.",
+      "ended_at": "2025-11-17T10:30:00Z"
+    }
+    ```
+
+    <Warning>
+      The resolve endpoint can only be called once per incident.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="MAINTENANCE" icon="wrench">
+    Use maintenance announcements to give users advance notice of planned downtime or service windows.
+
+    **Endpoint:** `POST /api/announcements/maintenance`
+
+    <ParamField body="title" type="string" required>
+      Maintenance window title.
+    </ParamField>
+    <ParamField body="content" type="string" required>
+      Description of the work being performed.
+    </ParamField>
+    <ParamField body="scheduled_start" type="string" required>
+      ISO 8601 start time for the maintenance window.
+    </ParamField>
+    <ParamField body="scheduled_end" type="string" required>
+      ISO 8601 end time. Must be after `scheduled_start`.
+    </ParamField>
+    <ParamField body="is_emergency" type="boolean">
+      Set to `true` for unplanned emergency maintenance.
+    </ParamField>
+    <ParamField body="affected_services" type="string[]">
+      Optional list of affected service names.
+    </ParamField>
+    <ParamField body="action" type="string">
+      `"publish"`, `"schedule"`, or omit for draft.
+    </ParamField>
+
+    Once maintenance has begun, mark it started and then completed:
+
+    ```bash
+    # Mark as started
+    curl --request POST \
+      --url https://your-domain.com/api/announcements/maintenance/ANNOUNCEMENT_UUID/start \
+      --header "Authorization: Bearer YOUR_JWT_TOKEN"
+
+    # Mark as completed
+    curl --request POST \
+      --url https://your-domain.com/api/announcements/maintenance/ANNOUNCEMENT_UUID/complete \
+      --header "Authorization: Bearer YOUR_JWT_TOKEN"
+    ```
+
+    <Info>
+      `complete` requires that `start` has already been called. The actual end time is recorded automatically.
+    </Info>
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## General actions
+
+These endpoints apply to all announcement types and are available to COMPANY_ADMIN only.
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/announcements/{id}/publish` | Publish a `DRAFT` or `SCHEDULED` announcement immediately |
+| `POST /api/announcements/{id}/schedule` | Schedule a `DRAFT` for future publication |
+| `POST /api/announcements/{id}/unschedule` | Cancel a scheduled publication, returns to `DRAFT` |
+| `POST /api/announcements/{id}/archive` | Archive a `PUBLISHED` announcement |
+| `POST /api/announcements/{id}/restore` | Restore an `ARCHIVED` announcement to `DRAFT` |
+| `PUT /api/announcements/{id}` | Update a `DRAFT` or `SCHEDULED` announcement |
+| `DELETE /api/announcements/{id}` | Soft-delete a `DRAFT` or `ARCHIVED` announcement |
